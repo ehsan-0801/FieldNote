@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
+import { LoadingState } from "@/components/ui/loading-state";
 import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/ssr";
 import { z } from "zod";
 import { Role } from "@/generated/prisma/enums";
@@ -20,7 +22,16 @@ const SCOPE_NOTE: Record<Role, string> = {
 
 const pageSchema = z.coerce.number().int().min(1).max(10_000).catch(1);
 
-export default async function ActivityPage({ searchParams }: PageProps<"/app/activity">) {
+// Session-dependent content streams in behind its own boundary so client navigations stay instant.
+export default function ActivityPage({ searchParams }: PageProps<"/app/activity">) {
+  return (
+    <Suspense fallback={<LoadingState label="Loading activity…" />}>
+      <Activity searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function Activity({ searchParams }: { searchParams: PageProps<"/app/activity">["searchParams"] }) {
   const user = await requirePageUser();
   const { page: rawPage } = await searchParams;
   const page = pageSchema.parse(Array.isArray(rawPage) ? rawPage[0] : rawPage);

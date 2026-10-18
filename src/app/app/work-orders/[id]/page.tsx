@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
+import { LoadingState } from "@/components/ui/loading-state";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeftIcon, MapPinIcon, ShieldWarningIcon } from "@phosphor-icons/react/ssr";
@@ -32,7 +34,22 @@ async function loadDetail(actor: Parameters<typeof getWorkOrderDetail>[0], id: s
   }
 }
 
-export default async function WorkOrderPage({ params, searchParams }: PageProps<"/app/work-orders/[id]">) {
+// Session-dependent content streams in behind its own boundary so client navigations stay instant.
+export default function WorkOrderPage({ params, searchParams }: PageProps<"/app/work-orders/[id]">) {
+  return (
+    <Suspense fallback={<LoadingState label="Loading work order…" />}>
+      <WorkOrderDetail params={params} searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function WorkOrderDetail({
+  params,
+  searchParams,
+}: {
+  params: PageProps<"/app/work-orders/[id]">["params"];
+  searchParams: PageProps<"/app/work-orders/[id]">["searchParams"];
+}) {
   const user = await requirePageUser();
   const { id } = await params;
   const { submitted } = await searchParams;

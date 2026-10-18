@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
+import { LoadingState } from "@/components/ui/loading-state";
 import Link from "next/link";
 import { ScrollIcon } from "@phosphor-icons/react/ssr";
 import { AdminOnly } from "@/components/admin/admin-only";
@@ -16,7 +18,16 @@ import { db } from "@/server/db";
 
 export const metadata: Metadata = { title: "Audit log" };
 
-export default async function AuditPage({ searchParams }: PageProps<"/app/admin/audit">) {
+// Session-dependent content streams in behind its own boundary so client navigations stay instant.
+export default function AuditPage({ searchParams }: PageProps<"/app/admin/audit">) {
+  return (
+    <Suspense fallback={<LoadingState label="Loading the audit log…" />}>
+      <AuditLog searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function AuditLog({ searchParams }: { searchParams: PageProps<"/app/admin/audit">["searchParams"] }) {
   const user = await requirePageUser();
   if (!canManageWorkspace(user)) return <AdminOnly />;
   const parsed = auditQuerySchema.safeParse(await searchParams);

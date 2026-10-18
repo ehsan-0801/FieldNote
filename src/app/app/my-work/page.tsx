@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
+import { LoadingState } from "@/components/ui/loading-state";
 import Link from "next/link";
 import { Role } from "@/generated/prisma/enums";
 import { PageHeader } from "@/components/ui/page-header";
@@ -8,7 +10,16 @@ import { requirePageUser } from "@/server/auth/session";
 
 export const metadata: Metadata = { title: "My work" };
 
-export default async function MyWorkPage({ searchParams }: PageProps<"/app/my-work">) {
+// Session-dependent content streams in behind its own boundary so client navigations stay instant.
+export default function MyWorkPage({ searchParams }: PageProps<"/app/my-work">) {
+  return (
+    <Suspense fallback={<LoadingState label="Loading your work…" />}>
+      <MyWork searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function MyWork({ searchParams }: { searchParams: PageProps<"/app/my-work">["searchParams"] }) {
   const user = await requirePageUser();
   const params = await searchParams;
 

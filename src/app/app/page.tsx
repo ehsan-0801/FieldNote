@@ -1,7 +1,9 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowUpRightIcon, CheckCircleIcon, ClockCounterClockwiseIcon, PlusIcon, WrenchIcon } from "@phosphor-icons/react/ssr";
 import { Role } from "@/generated/prisma/enums";
+import { LoadingState } from "@/components/ui/loading-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/states";
 import { ActivityTimeline } from "@/components/work-orders/activity-timeline";
@@ -15,7 +17,27 @@ import { workOrderListQuerySchema } from "@/domain/schemas";
 
 export const metadata: Metadata = { title: "Overview" };
 
-export default async function OverviewPage() {
+// The header renders immediately; everything that needs the session streams in below it.
+export default function OverviewPage() {
+  return (
+    <>
+      <PageHeader
+        title="Operations overview"
+        actions={
+          <Link href="/app/work-orders/new" className="btn btn-primary">
+            <PlusIcon size={16} aria-hidden />
+            New report
+          </Link>
+        }
+      />
+      <Suspense fallback={<LoadingState label="Loading the overview…" />}>
+        <OverviewContent />
+      </Suspense>
+    </>
+  );
+}
+
+async function OverviewContent() {
   const user = await requirePageUser();
   const now = new Date();
   const isManager = user.role === Role.ADMIN || user.role === Role.COORDINATOR;
@@ -27,17 +49,10 @@ export default async function OverviewPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow={`${user.workspaceName} · ${formatDate(now)}`}
-        title="Operations overview"
-        actions={
-          <Link href="/app/work-orders/new" className="btn btn-primary">
-            <PlusIcon size={16} aria-hidden />
-            New report
-          </Link>
-        }
-      />
       <div className="space-y-6">
+        <p className="label-mono -mt-2">
+          {user.workspaceName} · {formatDate(now)}
+        </p>
         <MetricStrip metrics={summary.metrics} />
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
