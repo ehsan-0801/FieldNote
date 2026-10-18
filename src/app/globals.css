@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+/*
+ * Workshop Ledger tokens. The default Tailwind palette is cleared so every colour
+ * in the UI comes from this list; see /style-ledger for the rendered reference.
+ */
+@theme {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-white: #ffffff;
+
+  --color-paper: #f5f3ed;
+  --color-paper-deep: #ece9e0;
+  --color-chalk: #fffefa;
+  --color-ink: #202724;
+  --color-ink-hover: #343f3a;
+  --color-ink-muted: #5d6864;
+  --color-rule: #daddd4;
+  --color-rule-strong: #c3c8bd;
+
+  --color-signal: #3e6b58;
+  --color-signal-hover: #335a4a;
+  --color-signal-soft: #e4ece6;
+  --color-oxide: #a74732;
+  --color-oxide-hover: #8f3c2a;
+  --color-oxide-soft: #f6e5df;
+  --color-amber: #b47a2d;
+  --color-amber-ink: #82551a;
+  --color-amber-soft: #f4ead8;
+
+  --color-sidebar: #202a27;
+  --color-sidebar-raised: #2b3733;
+  --color-sidebar-ink: #e3e7e2;
+  --color-sidebar-muted: #9aa69f;
+
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", monospace;
+
+  --radius-control: 8px;
+  --radius-panel: 10px;
+  --radius-sheet: 12px;
+
+  --ease-ledger: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes ledger-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01";
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-signal);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  ::selection {
+    background: var(--color-signal-soft);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-control border px-3.5 text-sm font-medium whitespace-nowrap transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-55;
+  }
+  .btn-sm {
+    @apply h-8 px-2.5 text-[13px];
+  }
+  .btn-primary {
+    @apply border-ink bg-ink text-chalk hover:bg-ink-hover;
+  }
+  .btn-signal {
+    @apply border-signal bg-signal text-chalk hover:bg-signal-hover;
+  }
+  .btn-secondary {
+    @apply border-rule-strong bg-chalk text-ink hover:bg-paper;
+  }
+  .btn-danger {
+    @apply border-oxide bg-oxide text-chalk hover:bg-oxide-hover;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent text-ink-muted hover:bg-paper-deep hover:text-ink;
+  }
+
+  .panel {
+    @apply rounded-panel border border-rule bg-chalk;
+  }
+  .panel-head {
+    @apply flex items-center justify-between gap-3 border-b border-rule px-4 py-3;
+  }
+  .panel-title {
+    @apply text-[13px] font-semibold tracking-[0.01em] text-ink;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-[13px] font-medium text-ink;
+  }
+  .field-hint {
+    @apply mt-1 text-xs text-ink-muted;
+  }
+  .field-error {
+    @apply mt-1 text-xs font-medium text-oxide;
+  }
+  .input {
+    @apply block h-9 w-full rounded-control border border-rule-strong bg-chalk px-3 text-sm text-ink transition-colors duration-150 placeholder:text-ink-muted/70 focus:border-signal focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-0 aria-invalid:border-oxide;
+  }
+  textarea.input {
+    @apply h-auto py-2 leading-relaxed;
+  }
+  select.input {
+    @apply appearance-none bg-[url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%3E%3Cpath%20fill='%235d6864'%20d='M213.66%20101.66l-80%2080a8%208%200%200%201-11.32%200l-80-80a8%208%200%200%201%2011.32-11.32L128%20164.69l74.34-74.35a8%208%200%200%201%2011.32%2011.32Z'/%3E%3C/svg%3E")] bg-[length:14px] bg-[right_10px_center] bg-no-repeat pr-8;
+  }
+
+  .label-mono {
+    @apply font-mono text-[11px] font-medium tracking-[0.06em] text-ink-muted uppercase;
+  }
+  .ref {
+    @apply font-mono text-[12.5px] font-medium tracking-tight text-ink-muted tabular-nums;
+  }
+  .link {
+    @apply text-signal underline decoration-signal/40 underline-offset-2 hover:decoration-signal;
+  }
+}
