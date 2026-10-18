@@ -2,10 +2,10 @@ import { z } from "zod";
 import { SYSTEM_INSTRUCTION, buildUserPrompt, extractionJsonSchema, geminiResponseSchema } from "./prompt";
 import { ProviderFailure, type ExtractionInput, type ReportExtractionProvider } from "./types";
 
-type FetchLike = typeof fetch;
+export type FetchLike = typeof fetch;
 
 /** Maps HTTP outcomes to failure codes; provider bodies are never forwarded to users. */
-async function postJson(fetcher: FetchLike, url: string, headers: Record<string, string>, body: unknown, signal: AbortSignal) {
+export async function postJson(fetcher: FetchLike, url: string, headers: Record<string, string>, body: unknown, signal: AbortSignal) {
   let response: Response;
   try {
     response = await fetcher(url, {

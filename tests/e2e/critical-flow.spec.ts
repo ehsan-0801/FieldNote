@@ -92,3 +92,13 @@ test("reporter sees the resolution and the full timeline", async ({ browser }) =
     await expect(page.getByText(line)).toBeVisible();
   }
 });
+
+test("the assistant explains it is unavailable when AI is turned off, and the rest keeps working", async ({ browser }) => {
+  const page = await signIn(browser, "priya@northgate.test");
+  await page.getByRole("link", { name: "Assistant" }).first().click();
+  await expect(page.getByRole("heading", { name: "Assistant", level: 1 })).toBeVisible();
+  await expect(page.getByText("The assistant is unavailable.")).toBeVisible();
+  await expect(page.getByLabel("Message the assistant")).toHaveCount(0);
+  await page.getByRole("link", { name: "Work orders" }).first().click();
+  await expect(page.getByRole("heading", { name: "Work orders" })).toBeVisible();
+});

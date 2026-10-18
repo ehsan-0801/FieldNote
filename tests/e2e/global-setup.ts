@@ -3,6 +3,8 @@ import pg from "pg";
 import { testDatabaseEnv } from "../support/test-database";
 
 const TABLES = [
+  "ChatMessage",
+  "ChatConversation",
   "AuditEvent",
   "AiExtraction",
   "StatusEvent",

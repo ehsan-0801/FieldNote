@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  ChatCircleTextIcon,
   ClipboardTextIcon,
   ClockCounterClockwiseIcon,
   PlusIcon,
@@ -21,6 +22,7 @@ const ICONS: Record<NavIcon, Icon> = {
   myWork: WrenchIcon,
   new: PlusIcon,
   activity: ClockCounterClockwiseIcon,
+  assistant: ChatCircleTextIcon,
   users: UsersIcon,
   categories: TagIcon,
   audit: ScrollIcon,

@@ -1,6 +1,6 @@
 import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
-import { MagnifyingGlassIcon, NotebookIcon } from "@phosphor-icons/react/ssr";
+import { ChatCircleTextIcon, MagnifyingGlassIcon, NotebookIcon } from "@phosphor-icons/react/ssr";
 import { requirePageUser } from "@/server/auth/session";
 import { AccountMenu } from "./account-menu";
 import { MobileNavigation, SidebarNavigation } from "./nav-links";
@@ -90,6 +90,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             <input id="global-search" name="q" type="search" className="input pl-9" placeholder="Search by reference, title or place" />
           </form>
           <div className="ml-auto flex items-center gap-3">
+            {/* The bottom bar has four slots, so the assistant is reached from here on small screens. */}
+            <Link href="/app/assistant" className="btn btn-ghost px-2 lg:hidden" aria-label="Assistant">
+              <ChatCircleTextIcon size={20} aria-hidden />
+            </Link>
             <Suspense fallback={<span className="h-10 w-32" aria-hidden />}>
               <TopBarAccount />
             </Suspense>

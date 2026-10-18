@@ -8,6 +8,7 @@ export const RATE_LIMITS = {
   // Per account: slows password guessing against one person.
   loginEmail: { limit: 8, windowSeconds: 15 * 60 },
   aiParse: { limit: 12, windowSeconds: 10 * 60 },
+  assistant: { limit: 30, windowSeconds: 10 * 60 },
   mutation: { limit: 120, windowSeconds: 60 },
 } as const;
 

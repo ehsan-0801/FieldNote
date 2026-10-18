@@ -10,6 +10,8 @@ export const TEST_PASSWORD = "correct-horse-battery";
 const passwordHash = bcrypt.hashSync(TEST_PASSWORD, 4);
 
 const TABLES = [
+  "ChatMessage",
+  "ChatConversation",
   "AuditEvent",
   "AiExtraction",
   "StatusEvent",

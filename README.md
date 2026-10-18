@@ -136,6 +136,26 @@ Free tiers, quotas and data-use terms change. Check them before deploying: Gemin
 Google’s products, so prefer Groq or a paid tier if reports may contain sensitive details. Every run is stored (`AiExtraction`) with
 provider, model, schema version, status, latency and error code. Raw report text is not logged.
 
+### Assistant
+
+`/app/assistant` is a general-purpose chat assistant that uses the same provider and key. It can answer anything. For workspace
+questions it calls read-only lookups (search work orders, open one by reference, overview counts, list technicians). These run on
+the server through the same scoped services as the UI, so the model only ever receives data the signed-in person can already see,
+with contact details removed.
+
+- **Suggest, then confirm.** The assistant can suggest assigning a technician, changing status, adding a note or filing a new
+  report. The server checks each suggestion against the person’s permissions and the workflow rules before offering it, and
+  runs it only when they click **Confirm**, through the normal services with their usual audit entries. A suggestion can be
+  confirmed once.
+- **Private history.** Conversations are saved per user and visible only to their owner, who can delete them. Actions confirmed
+  from a chat stay on the work orders and in the audit log.
+- **Bounded.** At most five model calls per message, a 15-second timeout per call, a strict reply format, and a limit of
+  30 messages per 10 minutes per person.
+- **Without a key** the page explains that the assistant is unavailable; everything else works as before.
+
+This is a deliberate change from the original brief, which ruled out a chat-first interface. Report intake itself still uses
+the structured review form.
+
 ### Evaluation
 
 `pnpm eval:ai` runs the 20 hand-written cases in `tests/fixtures/extraction-cases.json` through whichever source is configured.

@@ -26,7 +26,7 @@ const NETWORK_FAILURE: ApiFailure = {
 /** Calls one of our JSON endpoints and validates the envelope and payload shape. */
 export async function callApi<T>(
   path: string,
-  options: { method?: "GET" | "POST" | "PATCH"; body?: unknown; schema: z.ZodType<T>; signal?: AbortSignal },
+  options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown; schema: z.ZodType<T>; signal?: AbortSignal },
 ): Promise<ApiResult<T>> {
   let response: Response;
   try {

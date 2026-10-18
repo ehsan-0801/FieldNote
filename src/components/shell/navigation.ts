@@ -1,6 +1,6 @@
 import { Role } from "@/generated/prisma/enums";
 
-export type NavIcon = "overview" | "work" | "myWork" | "new" | "activity" | "users" | "categories" | "audit";
+export type NavIcon = "overview" | "work" | "myWork" | "new" | "activity" | "assistant" | "users" | "categories" | "audit";
 
 export interface NavItem {
   href: string;
@@ -22,6 +22,7 @@ export function navigationFor(role: Role): { main: NavItem[]; admin: NavItem[] }
   main.push(
     { href: "/app/work-orders/new", label: "New report", icon: "new", mobile: true },
     { href: "/app/activity", label: "Activity", icon: "activity", mobile: true },
+    { href: "/app/assistant", label: "Assistant", icon: "assistant" },
   );
   const admin: NavItem[] =
     role === Role.ADMIN
