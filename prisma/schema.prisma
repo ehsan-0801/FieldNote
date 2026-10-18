@@ -1,0 +1,229 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  COORDINATOR
+  TECHNICIAN
+  REPORTER
+}
+
+enum WorkOrderStatus {
+  SUBMITTED
+  TRIAGE
+  READY
+  IN_PROGRESS
+  BLOCKED
+  RESOLVED
+  CLOSED
+  ARCHIVED
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum NoteKind {
+  COMMENT
+  PROGRESS
+  RESOLUTION
+}
+
+enum AiRunStatus {
+  SUCCEEDED
+  FALLBACK
+}
+
+model Workspace {
+  id                  String       @id @default(cuid())
+  name                String
+  slug                String       @unique
+  // Next number handed out for WO-#### references; incremented atomically.
+  nextReferenceNumber Int          @default(1001)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  users               User[]
+  categories          Category[]
+  workOrders          WorkOrder[]
+  auditEvents         AuditEvent[]
+}
+
+model User {
+  id                 String          @id @default(cuid())
+  workspaceId        String
+  email              String          @unique
+  name               String
+  passwordHash       String
+  role               Role            @default(REPORTER)
+  isActive           Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  workspace          Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  reportedWorkOrders WorkOrder[]     @relation("Reporter")
+  assignedWorkOrders WorkOrder[]     @relation("Assignee")
+  notes              WorkOrderNote[]
+  auditEvents        AuditEvent[]    @relation("AuditActor")
+  statusEvents       StatusEvent[]   @relation("StatusActor")
+  sessions           Session[]
+
+  @@index([workspaceId, role, isActive])
+}
+
+// Server-side sessions: the cookie carries a random token, only its SHA-256 is stored.
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Fixed-window counters shared by every serverless instance.
+model RateLimitBucket {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+}
+
+model Category {
+  id          String      @id @default(cuid())
+  workspaceId String
+  name        String
+  slug        String
+  description String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  workOrders  WorkOrder[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, isActive])
+}
+
+model WorkOrder {
+  id                     String          @id @default(cuid())
+  reference              String
+  workspaceId            String
+  reporterId             String
+  assigneeId             String?
+  categoryId             String?
+  title                  String
+  originalReport         String
+  summary                String?
+  locationLabel          String?
+  assetLabel             String?
+  status                 WorkOrderStatus @default(SUBMITTED)
+  priority               Priority        @default(NORMAL)
+  priorityRationale      String?
+  // Rule-based priority factors; humans confirm them, the score is derived.
+  safetyFlag             Boolean         @default(false)
+  essentialServiceDown   Boolean         @default(false)
+  multiplePeopleAffected Boolean         @default(false)
+  worsening              Boolean         @default(false)
+  impactScore            Int             @default(0)
+  priorityConfirmedAt    DateTime?
+  resolutionNote         String?
+  resolvedAt             DateTime?
+  closedAt               DateTime?
+  archivedAt             DateTime?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  workspace              Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  reporter               User            @relation("Reporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  assignee               User?           @relation("Assignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  category               Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  notes                  WorkOrderNote[]
+  statusEvents           StatusEvent[]
+  aiExtractions          AiExtraction[]
+
+  @@unique([workspaceId, reference])
+  @@index([workspaceId, status, updatedAt])
+  @@index([workspaceId, priority, createdAt])
+  @@index([reporterId, createdAt])
+  @@index([assigneeId, status, updatedAt])
+  @@index([categoryId])
+}
+
+// History rows use Restrict: work orders are archived, never deleted.
+model WorkOrderNote {
+  id          String    @id @default(cuid())
+  workOrderId String
+  authorId    String
+  kind        NoteKind  @default(COMMENT)
+  body        String
+  createdAt   DateTime  @default(now())
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([workOrderId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model StatusEvent {
+  id          String           @id @default(cuid())
+  workOrderId String
+  actorId     String
+  fromStatus  WorkOrderStatus?
+  toStatus    WorkOrderStatus
+  reason      String?
+  createdAt   DateTime         @default(now())
+  workOrder   WorkOrder        @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  actor       User             @relation("StatusActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([workOrderId, createdAt])
+}
+
+model AiExtraction {
+  id              String      @id @default(cuid())
+  workOrderId     String
+  provider        String
+  model           String
+  status          AiRunStatus
+  schemaVersion   String      @default("v1")
+  suggestedTitle  String?
+  summary         String?
+  suggestedFields Json
+  evidenceSignals Json
+  missingDetails  Json
+  confidence      Int?
+  latencyMs       Int?
+  errorCode       String?
+  createdAt       DateTime    @default(now())
+  workOrder       WorkOrder   @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+
+  @@index([workOrderId, createdAt])
+  @@index([provider, model, createdAt])
+}
+
+model AuditEvent {
+  id          String    @id @default(cuid())
+  workspaceId String
+  actorId     String?
+  action      String
+  entityType  String
+  entityId    String
+  requestId   String?
+  ipHash      String?
+  details     Json?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  actor       User?     @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+}
