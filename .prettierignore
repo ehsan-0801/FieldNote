@@ -1,0 +1,10 @@
+src/generated
+prisma/migrations
+pnpm-lock.yaml
+docs
+Prompts
+.claude
+.next
+test-results
+playwright-report
+*.md

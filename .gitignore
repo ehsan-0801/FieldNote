@@ -1,0 +1,43 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# testing
+/coverage
+/test-results
+/playwright-report
+
+# next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# prisma generated client
+/src/generated/
+
+# env files — only the placeholder example is committed
+.env
+.env.*
+!.env.example
+
+# project briefs and agent tooling stay local
+/docs/
+/Prompts/
+/.claude/
+/.agents/
+/.windsurf/
+skills-lock.json
+
+# only README.md is published among markdown files
+*.md
+!/README.md
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+.pnpm-debug.log*
+.vercel
