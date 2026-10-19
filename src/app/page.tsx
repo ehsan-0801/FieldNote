@@ -1,5 +1,14 @@
 import Link from "next/link";
-import { ArrowRightIcon, QuotesIcon, ShieldWarningIcon } from "@phosphor-icons/react/ssr";
+import {
+  ArrowRightIcon,
+  ChatCircleTextIcon,
+  ClockCounterClockwiseIcon,
+  GithubLogoIcon,
+  PlugsConnectedIcon,
+  QuotesIcon,
+  ShieldWarningIcon,
+  UsersThreeIcon,
+} from "@phosphor-icons/react/ssr";
 import { BrandLogo } from "@/components/ui/brand-logo";
 import { PriorityLabel } from "@/components/ui/priority-label";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -20,6 +29,31 @@ const STEPS = [
   {
     title: "Every move on the record",
     body: "Assignments, status changes and notes form an append-only timeline. Reporters see their own reports; technicians see their own work.",
+  },
+];
+
+const SOURCE_URL = "https://github.com/ehsan-0801/FieldNote";
+
+const FEATURES = [
+  {
+    icon: ChatCircleTextIcon,
+    title: "An assistant that knows the workspace",
+    body: "Ask what needs a decision today or for the latest on a work order. It looks up only what you can already open, and any change it suggests waits for your confirmation.",
+  },
+  {
+    icon: PlugsConnectedIcon,
+    title: "Bring any AI provider",
+    body: "Paste a key from Gemini, Claude, OpenAI, Groq, OpenRouter, Mistral, DeepSeek and others. The service is recognised, a model is picked and the key is checked before it’s saved, encrypted.",
+  },
+  {
+    icon: UsersThreeIcon,
+    title: "Four roles, clear boundaries",
+    body: "Reporters, technicians, coordinators and administrators each see and change only what their role allows, checked on the server for every request.",
+  },
+  {
+    icon: ClockCounterClockwiseIcon,
+    title: "An audit log you can trust",
+    body: "Every sign-in, edit, assignment and setting change is recorded with who did it and when, in the same transaction as the change itself.",
   },
 ];
 
@@ -49,6 +83,10 @@ export default function LandingPage() {
                 Sign in to your workspace
                 <ArrowRightIcon size={16} aria-hidden />
               </Link>
+              <a href={SOURCE_URL} className="btn btn-secondary h-10 px-4" target="_blank" rel="noopener noreferrer">
+                <GithubLogoIcon size={16} aria-hidden />
+                View the source
+              </a>
             </div>
           </div>
 
@@ -103,15 +141,35 @@ export default function LandingPage() {
             ))}
           </ol>
           <p className="mt-6 max-w-2xl text-sm text-ink-muted">
-            AI drafting is optional. Without a provider key, or when the provider is slow, a clearly labelled rule-based draft is used and
-            everything else works the same.
+            AI is optional. Without a provider key, or when the provider is slow, a clearly labelled rule-based draft is used and everything
+            else works the same.
           </p>
+        </section>
+
+        <section className="pt-14" aria-labelledby="features-heading">
+          <h2 id="features-heading" className="label-mono mb-6">
+            What’s inside
+          </h2>
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {FEATURES.map((feature) => (
+              <li key={feature.title} className="panel px-5 py-5">
+                <feature.icon size={22} className="text-signal" aria-hidden />
+                <h3 className="mt-3 font-semibold">{feature.title}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{feature.body}</p>
+              </li>
+            ))}
+          </ul>
         </section>
       </main>
 
       <footer className="border-t border-rule">
         <div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-3 px-4 py-6 text-xs text-ink-muted sm:px-8">
-          <span>Fieldnote Atlas</span>
+          <span>
+            Fieldnote Atlas ·{" "}
+            <a href={SOURCE_URL} className="underline underline-offset-2 hover:text-ink" target="_blank" rel="noopener noreferrer">
+              Source on GitHub
+            </a>
+          </span>
           <span>Priority suggestions are not a professional safety assessment.</span>
         </div>
       </footer>
