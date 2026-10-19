@@ -4,6 +4,8 @@ Issue intake and work-order tracking for small facilities teams: studios, co-wor
 A reporter writes a rough note; it is saved verbatim, optionally drafted into structure, reviewed by a person, triaged, assigned,
 worked and resolved, with every decision kept in an append-only timeline.
 
+**Live demo:** [field-note-swart.vercel.app](https://field-note-swart.vercel.app)
+
 - **Stack:** Next.js 16 (App Router, Cache Components), React 19, TypeScript (strict), Tailwind CSS 4, Prisma 7 + PostgreSQL, Zod 4,
   `@phosphor-icons/react`, Vitest, Playwright.
 - **AI is optional.** Paste an API key from almost any provider (Gemini, Claude, OpenAI, Groq, OpenRouter, Mistral, DeepSeek and
@@ -21,6 +23,7 @@ worked and resolved, with every decision kept in an append-only timeline.
 | Data               | PostgreSQL via Prisma; every change is written to an append-only audit log                           |
 | Security           | Server-side sessions, role checks on every API route, rate limits, CSP, encrypted AI keys            |
 | Runs on            | Any Node 22 host; built for Vercel + Neon                                                            |
+| Live demo          | [field-note-swart.vercel.app](https://field-note-swart.vercel.app)                                   |
 
 ## Quick start
 
