@@ -86,10 +86,19 @@ export async function resolveExtractionSelection(workspaceId: string): Promise<P
   return provider ? { provider } : { provider: null, reason: "NO_KEY" };
 }
 
-/** Same rules as resolveExtractionSelection. Null means the assistant is unavailable. */
-export async function resolveChatProvider(workspaceId: string): Promise<ChatProvider | null> {
+/**
+ * Same rules as resolveExtractionSelection. Null means the assistant is unavailable.
+ * With `configId`, that saved provider of the workspace is used instead of the default;
+ * one that doesn't exist (in this workspace) or can't be decrypted gives null.
+ */
+export async function resolveChatProvider(workspaceId: string, configId?: string): Promise<ChatProvider | null> {
   const env = serverEnv();
   if (env.AI_PROVIDER === "none") return null;
+  if (configId) {
+    const chosen = await db.aiProviderConfig.findFirst({ where: { id: configId, workspaceId }, select: activeSelect });
+    const settings = chosen ? decryptConfig(chosen, workspaceId) : null;
+    return settings ? chatProviderFor(settings) : null;
+  }
   const row = await activeConfig(workspaceId);
   if (!row) return selectChatProvider(env);
   const settings = decryptConfig(row, workspaceId);
@@ -115,4 +124,25 @@ export async function describeAiSource(workspaceId: string): Promise<AiSource> {
   return env.AI_PROVIDER === "gemini"
     ? { kind: "environment", provider: "gemini", model: env.GEMINI_MODEL, hasKey: Boolean(env.GEMINI_API_KEY) }
     : { kind: "environment", provider: "groq", model: env.GROQ_MODEL, hasKey: Boolean(env.GROQ_API_KEY) };
+}
+
+export interface ChatProviderChoice {
+  id: string;
+  label: string;
+  model: string;
+  isActive: boolean;
+}
+
+/** Saved providers anyone in the workspace may pick for the assistant. Labels and models only; never keys. */
+export async function listChatProviderChoices(workspaceId: string): Promise<ChatProviderChoice[]> {
+  if (serverEnv().AI_PROVIDER === "none") return [];
+  const rows = await db.aiProviderConfig.findMany({
+    where: { workspaceId },
+    select: { ...activeSelect, isActive: true },
+    orderBy: [{ isActive: "desc" }, { label: "asc" }],
+    take: 50,
+  });
+  return rows
+    .filter((row) => decryptConfig(row, workspaceId) !== null)
+    .map((row) => ({ id: row.id, label: row.label, model: row.model, isActive: row.isActive }));
 }

@@ -6,6 +6,7 @@ import { LoadingState } from "@/components/ui/loading-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { DomainError } from "@/domain/errors";
 import { ASSISTANT_UNAVAILABLE, getConversation, isAssistantAvailable, listConversations } from "@/server/assistant/service";
+import { listChatProviderChoices } from "@/server/ai/provider-config";
 import { requirePageUser } from "@/server/auth/session";
 
 export const metadata: Metadata = { title: "Assistant" };
@@ -30,8 +31,9 @@ async function Assistant({ searchParams }: { searchParams: PageProps<"/app/assis
   const user = await requirePageUser();
   const { c } = await searchParams;
   const conversationId = conversationParam.parse(Array.isArray(c) ? c[0] : c);
-  const [available, conversations, conversation] = await Promise.all([
+  const [available, models, conversations, conversation] = await Promise.all([
     isAssistantAvailable(user.workspaceId),
+    listChatProviderChoices(user.workspaceId),
     listConversations(user),
     conversationId
       ? getConversation(user, conversationId).catch((error: unknown) => {
@@ -44,7 +46,8 @@ async function Assistant({ searchParams }: { searchParams: PageProps<"/app/assis
   return (
     <AssistantChat
       key={conversation?.id ?? "new"}
-      available={available}
+      available={available || models.length > 0}
+      models={models}
       unavailableMessage={ASSISTANT_UNAVAILABLE}
       conversations={conversations.map((item) => ({ id: item.id, title: item.title, updatedAt: item.updatedAt.toISOString() }))}
       conversation={conversation}

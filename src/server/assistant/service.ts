@@ -153,9 +153,14 @@ const FAILURE_REPLY: Record<string, string> = {
 
 export async function sendAssistantMessage(
   ctx: ActorContext & { user: { name: string; role: Role; workspaceName: string } },
-  input: { conversationId?: string; content: string },
+  input: { conversationId?: string; content: string; providerId?: string },
 ) {
-  const provider = await resolveChatProvider(ctx.actor.workspaceId);
+  const provider = await resolveChatProvider(ctx.actor.workspaceId, input.providerId);
+  if (!provider && input.providerId && serverEnv().AI_PROVIDER !== "none") {
+    throw new DomainError("VALIDATION_ERROR", "That model is no longer available. Choose another one.", {
+      providerId: ["That model is no longer available. Choose another one."],
+    });
+  }
   if (!provider) throw new DomainError("AI_UNAVAILABLE", ASSISTANT_UNAVAILABLE);
   await enforceRateLimit("assistant", ctx.actor.id);
 

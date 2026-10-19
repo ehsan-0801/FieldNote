@@ -56,6 +56,8 @@ export const storedLinksSchema = z.array(z.object({ reference: z.string(), workO
 export const sendMessageSchema = z.strictObject({
   conversationId: z.string().trim().min(1).max(40).optional(),
   content: z.string().trim().min(1, { error: "Write a message first." }).max(2000, { error: "Keep messages under 2000 characters." }),
+  /** A saved AI provider of this workspace to answer with; omitted means the workspace default. */
+  providerId: z.string().trim().min(1).max(40).optional(),
 });
 
 export const actionDecisionSchema = z.strictObject({ decision: z.enum(["confirm", "dismiss"]) });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -25,17 +25,71 @@ const SUGGESTIONS = [
   "Help me report: the lift on level 2 keeps stopping between floors.",
 ];
 
+export interface ModelChoice {
+  id: string;
+  label: string;
+  model: string;
+  isActive: boolean;
+}
+
+const MODEL_STORAGE_KEY = "fieldnote.assistant.model";
+
+/** A picker only helps when there is something other than the default to choose. */
+function showModelPicker(models: ModelChoice[]): boolean {
+  return models.some((model) => !model.isActive);
+}
+
+function readStoredModel(): string {
+  try {
+    return window.localStorage.getItem(MODEL_STORAGE_KEY) ?? "";
+  } catch {
+    // Storage can be unavailable (private windows, blocked site data); the default still works.
+    return "";
+  }
+}
+
+function subscribeToStoredModel(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(MODEL_STORAGE_KEY, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(MODEL_STORAGE_KEY, onChange);
+  };
+}
+
+/**
+ * The model chosen for new messages: "" is the workspace default, otherwise a saved
+ * provider's id. Remembered in this browser; a remembered choice that no longer exists
+ * falls back to the default.
+ */
+function useModelChoice(models: ModelChoice[]): [string, (id: string) => void] {
+  const stored = useSyncExternalStore(subscribeToStoredModel, readStoredModel, () => "");
+  const valid = models.some((model) => model.id === stored && !model.isActive) ? stored : "";
+  const choose = (id: string) => {
+    try {
+      window.localStorage.setItem(MODEL_STORAGE_KEY, id);
+    } catch {
+      // Not remembered; nothing else to do.
+    }
+    window.dispatchEvent(new Event(MODEL_STORAGE_KEY));
+  };
+  return [valid, choose];
+}
+
 /** Plain-text reply with "- " bullet lists; work-order references the person can open become links. */
 export function AssistantChat({
   conversations,
   conversation: initial,
   available,
   unavailableMessage,
+  models,
 }: {
   conversations: { id: string; title: string; updatedAt: string }[];
   conversation: Conversation | null;
   available: boolean;
   unavailableMessage: string;
+  /** Saved AI providers of the workspace; empty when only the environment default exists. */
+  models: ModelChoice[];
 }) {
   const router = useRouter();
   const [conversation, setConversation] = useState<Conversation | null>(initial);
@@ -45,6 +99,7 @@ export function AssistantChat({
   const [deciding, setDeciding] = useState<string | null>(null);
   const [error, setError] = useState<ApiFailure | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [modelId, setModelId] = useModelChoice(models);
   const endRef = useRef<HTMLDivElement>(null);
   const messageCount = conversation?.messages.length ?? 0;
 
@@ -63,7 +118,11 @@ export function AssistantChat({
     const result = await callApi("/api/assistant/messages", {
       signal: AbortSignal.timeout(70_000),
       method: "POST",
-      body: { content, ...(conversation ? { conversationId: conversation.id } : {}) },
+      body: {
+        content,
+        ...(conversation ? { conversationId: conversation.id } : {}),
+        ...(modelId ? { providerId: modelId } : {}),
+      },
       schema: conversationSchema,
     });
     setSending(false);
@@ -216,9 +275,32 @@ export function AssistantChat({
                   </InlineNotice>
                 </div>
               ) : null}
-              <label htmlFor="assistant-input" className="field-label">
-                Message the assistant
-              </label>
+              <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+                <label htmlFor="assistant-input" className="field-label">
+                  Message the assistant
+                </label>
+                {showModelPicker(models) ? (
+                  <div className="mb-1.5 flex min-w-0 items-center gap-2">
+                    <label htmlFor="assistant-model" className="text-xs text-ink-muted">
+                      Model
+                    </label>
+                    <select
+                      id="assistant-model"
+                      className="input h-9 max-w-[18rem] min-w-0 py-0 text-sm"
+                      value={modelId}
+                      onChange={(event) => setModelId(event.target.value)}
+                    >
+                      {models.some((model) => model.isActive) ? null : <option value="">Default (environment)</option>}
+                      {models.map((model) => (
+                        <option key={model.id} value={model.isActive ? "" : model.id}>
+                          {model.label} · {model.model}
+                          {model.isActive ? " (default)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
               <div className="flex items-end gap-2">
                 <textarea
                   id="assistant-input"

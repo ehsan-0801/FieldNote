@@ -4,6 +4,8 @@ import { ProviderFailure, type ExtractionInput, type JsonCompleter, type JsonReq
 
 export type FetchLike = typeof fetch;
 
+const INVALID_KEY_MARKER = /API_KEY_INVALID|api key not valid|invalid[ _]api[ _]key/i;
+
 /** Maps HTTP outcomes to failure codes; provider bodies are never forwarded to users. */
 export async function requestJson(
   fetcher: FetchLike,
@@ -27,7 +29,14 @@ export async function requestJson(
   }
   if (response.status === 429) throw new ProviderFailure("RATE_LIMITED", false, "rate limited", 429);
   if (response.status >= 500) throw new ProviderFailure("PROVIDER_ERROR", true, `upstream ${response.status}`, response.status);
-  if (!response.ok) throw new ProviderFailure("PROVIDER_ERROR", false, `upstream ${response.status}`, response.status);
+  if (!response.ok) {
+    // Google answers an invalid key with 400 API_KEY_INVALID, not 401; report it as a rejected key.
+    // The body is only matched, never kept or forwarded.
+    if (response.status === 400 && INVALID_KEY_MARKER.test((await response.text().catch(() => "")).slice(0, 4000))) {
+      throw new ProviderFailure("PROVIDER_ERROR", false, "key rejected", 401);
+    }
+    throw new ProviderFailure("PROVIDER_ERROR", false, `upstream ${response.status}`, response.status);
+  }
   try {
     return (await response.json()) as unknown;
   } catch {
