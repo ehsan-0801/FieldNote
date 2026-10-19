@@ -44,19 +44,18 @@ Generate a session secret with `openssl rand -base64 48`.
 | Role        | Email                   | Password              |
 | ----------- | ----------------------- | --------------------- |
 | Admin       | `admin@fieldnote.com`   | `password123`         |
-| Coordinator | `priya@northgate.test`  | `fieldnote-demo-2026` |
-| Technician  | `tomas@northgate.test`  | `fieldnote-demo-2026` |
-| Technician  | `hana@northgate.test`   | `fieldnote-demo-2026` |
-| Reporter    | `jordan@northgate.test` | `fieldnote-demo-2026` |
-| Reporter    | `sam@northgate.test`    | `fieldnote-demo-2026` |
+| Coordinator | `priya@northgate.test`  | `password123`         |
+| Technician  | `tomas@northgate.test`  | `password123`         |
+| Technician  | `hana@northgate.test`   | `password123`         |
+| Reporter    | `jordan@northgate.test` | `password123`         |
+| Reporter    | `sam@northgate.test`    | `password123`         |
 
 A second workspace (“Harbor Studio Collective”, `ade@harbor.test`) exists to demonstrate workspace isolation. All people, places
 and reports are fictional. Passwords are stored only as bcrypt hashes. The seed refuses to create these accounts when
 `NODE_ENV=production` (see [Production seed](#production-seed)).
 
-On the [live demo](https://field-note-swart.vercel.app), sign in with the **admin** account above. The other accounts' shared
-password `fieldnote-demo-2026` is refused in production by design; sign in as the admin and set a new password for them under
-**People** to try the other roles there.
+All of these accounts work on the [live demo](https://field-note-swart.vercel.app). The seed script (`prisma/seed.ts`) is kept
+out of the repository, so `pnpm db:seed` only works from a working copy that has it.
 
 ## Scripts
 

@@ -45,3 +45,4 @@ skills-lock.json
 npm-debug.log*
 .pnpm-debug.log*
 .vercel
+/prisma/seed.ts
