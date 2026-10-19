@@ -12,15 +12,19 @@ import { enforceRateLimit } from "../rate-limit";
 import type { ActorContext } from "../request-context";
 import { addWorkOrderNote, createWorkOrder, transitionWorkOrder, updateWorkOrder } from "../work-orders/commands";
 import { visibleWorkOrdersWhere } from "../work-orders/scope";
-import { selectChatProvider, type ChatTurn } from "./chat-provider";
+import { resolveChatProvider } from "../ai/provider-config";
+import type { ChatTurn } from "./chat-provider";
 import { runAssistantTurn } from "./engine";
 import { findVisibleByReference, runAssistantTool } from "./tools";
 
 const HISTORY_MESSAGES = 12;
+const MAX_STORED_MESSAGES = 200;
+// Whole turn, including lookups; kept under the route's maxDuration so a reply is always saved.
+const ASSISTANT_BUDGET_MS = 45_000;
 const NOT_FOUND = "That conversation isn’t yours or no longer exists.";
 
 export const ASSISTANT_UNAVAILABLE =
-  "The assistant needs an AI provider. An administrator can add a Gemini or Groq key; everything else in Fieldnote Atlas works without it.";
+  "The assistant needs an AI provider. An administrator can add one under Administration › AI providers; everything else in Fieldnote Atlas works without it.";
 
 const ROLE_SUMMARY: Record<Role, string> = {
   ADMIN: "administrator: sees all work in the workspace and manages people and categories",
@@ -29,8 +33,8 @@ const ROLE_SUMMARY: Record<Role, string> = {
   REPORTER: "reporter: files reports and follows their own reports",
 };
 
-export function isAssistantAvailable(): boolean {
-  return selectChatProvider(serverEnv()) !== null;
+export async function isAssistantAvailable(workspaceId: string): Promise<boolean> {
+  return (await resolveChatProvider(workspaceId)) !== null;
 }
 
 function systemPrompt(user: { name: string; role: Role; workspaceName: string }, now: Date): string {
@@ -44,6 +48,12 @@ Return exactly one JSON object per turn. Unused fields are empty strings.
   get_work_order: reference such as WO-1008.
   get_overview: counts of open, unassigned, at-risk and recently resolved work.
   list_technicians: people who can be assigned (coordinators and administrators only).
+  list_categories: active categories with how many open work orders each has.
+  recent_activity: the latest events this person can see (who did what, on which work order, when).
+  workload: open work counted by status and by owner (whole workspace for coordinators and administrators, otherwise the person's own queue or reports) plus the most pressing items.
+  my_work_orders: work assigned to this person and work they reported; status optional (empty means everything except archived).
+- For any question about this workspace's work orders, people, categories, activity or workload, ALWAYS look it up with a tool first and answer only from tool results. Never guess or invent workspace data.
+- If the tool results do not contain the answer, say plainly that the data you can see doesn't show it. General questions that are not about this workspace can be answered without tools.
 - To reply, set step "answer" and write plain text: short paragraphs and "- " bullet lists, no markdown headings or tables. Refer to work orders by reference (WO-1234).
 - State facts about work orders only when they came from a tool result in this conversation. If a lookup finds nothing, say so plainly.
 - You cannot change anything yourself. If the person asks for a change, fill "proposal" and say in the reply that they can review and confirm it below. Actions:
@@ -61,10 +71,21 @@ function historyTurns(messages: { role: ChatRole; content: string }[]): ChatTurn
       ? { role: "user", text: redactContactDetails(message.content) }
       : {
           role: "model",
-          text: JSON.stringify({ step: "answer", tool: "none", query: "", reference: "", status: "", reply: message.content }),
+          // Replayed in the full step shape so the model's own examples match the schema it must follow.
+          text: JSON.stringify({
+            step: "answer",
+            tool: "none",
+            query: "",
+            reference: "",
+            status: "",
+            reply: message.content,
+            proposal: NO_PROPOSAL,
+          }),
         },
   );
 }
+
+const NO_PROPOSAL: AssistantStep["proposal"] = { action: "none", reference: "", technicianName: "", toStatus: "", text: "", location: "" };
 
 type ProposalCheck = { proposal: StoredProposal } | { notice: string } | null;
 
@@ -134,7 +155,7 @@ export async function sendAssistantMessage(
   ctx: ActorContext & { user: { name: string; role: Role; workspaceName: string } },
   input: { conversationId?: string; content: string },
 ) {
-  const provider = selectChatProvider(serverEnv());
+  const provider = await resolveChatProvider(ctx.actor.workspaceId);
   if (!provider) throw new DomainError("AI_UNAVAILABLE", ASSISTANT_UNAVAILABLE);
   await enforceRateLimit("assistant", ctx.actor.id);
 
@@ -159,6 +180,7 @@ export async function sendAssistantMessage(
     history: historyTurns(recent.reverse()),
     runTool: (step) => runAssistantTool(ctx.actor, step),
     timeoutMs: Math.max(serverEnv().AI_TIMEOUT_MS, 15_000),
+    budgetMs: ASSISTANT_BUDGET_MS,
   });
 
   let content: string;
@@ -208,7 +230,9 @@ export async function getConversation(actor: Actor, id: string) {
       id: true,
       title: true,
       messages: {
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        // Newest messages win when a conversation is very long; reversed below for display.
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: MAX_STORED_MESSAGES,
         select: {
           id: true,
           role: true,
@@ -229,7 +253,7 @@ export async function getConversation(actor: Actor, id: string) {
   return {
     id: conversation.id,
     title: conversation.title,
-    messages: conversation.messages.map((message) => ({
+    messages: conversation.messages.reverse().map((message) => ({
       ...message,
       createdAt: message.createdAt.toISOString(),
       links: parseOrNull(storedLinksSchema, message.links) ?? [],
@@ -282,8 +306,15 @@ export async function decideAssistantAction(ctx: ActorContext, messageId: string
     if (!proposal.success) throw new DomainError("VALIDATION_ERROR", "This suggestion is no longer valid.");
     outcome = await executeProposal(ctx, proposal.data);
   } catch (error) {
-    // Expected refusals (permissions, workflow rules) are shown on the card; anything else is a real fault.
-    if (!(error instanceof DomainError)) throw error;
+    // Expected refusals (permissions, workflow rules) are shown on the card. Anything else is a
+    // real fault: record that nothing was done, then let the request fail as usual.
+    if (!(error instanceof DomainError)) {
+      await db.chatMessage.update({
+        where: { id: message.id },
+        data: { actionStatus: AssistantActionStatus.FAILED, actionResult: "Something went wrong, so nothing was changed. Try again." },
+      });
+      throw error;
+    }
     status = AssistantActionStatus.FAILED;
     outcome = { result: error.message };
   }

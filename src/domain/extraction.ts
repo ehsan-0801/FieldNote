@@ -55,3 +55,22 @@ export const storedSuggestedFieldsSchema = z.object({
 });
 export const storedSignalsSchema = z.array(z.object({ factor: z.enum(PRIORITY_SIGNALS), evidence: z.string().max(200) })).max(8);
 export const storedMissingDetailsSchema = z.array(z.string().max(160)).max(5);
+
+/** Response of POST /api/ai/parse-report as the client receives it (dates arrive as strings). */
+export const extractionResponseSchema = z.object({
+  provider: z.string(),
+  model: z.string(),
+  status: z.enum(["SUCCEEDED", "FALLBACK"]),
+  errorCode: z.enum(AI_ERROR_CODES).nullable(),
+  createdAt: z.string(),
+  suggestion: z.object({
+    suggestedTitle: z.string(),
+    summary: z.string(),
+    categorySlug: z.string().nullable(),
+    suggestedPriority: z.enum(Priority),
+    signals: storedSignalsSchema,
+    missingDetails: storedMissingDetailsSchema,
+    suggestedNextStep: z.string(),
+    confidence: z.number().nullable(),
+  }),
+});

@@ -1,7 +1,17 @@
 import { z } from "zod";
-import { WorkOrderStatus } from "@/generated/prisma/enums";
+import { Role, WorkOrderStatus } from "@/generated/prisma/enums";
 
-export const ASSISTANT_TOOLS = ["none", "search_work_orders", "get_work_order", "get_overview", "list_technicians"] as const;
+export const ASSISTANT_TOOLS = [
+  "none",
+  "search_work_orders",
+  "get_work_order",
+  "get_overview",
+  "list_technicians",
+  "list_categories",
+  "recent_activity",
+  "workload",
+  "my_work_orders",
+] as const;
 export const PROPOSAL_ACTIONS = ["none", "assign", "change_status", "add_note", "create_report"] as const;
 
 /**
@@ -51,3 +61,34 @@ export const sendMessageSchema = z.strictObject({
 export const actionDecisionSchema = z.strictObject({ decision: z.enum(["confirm", "dismiss"]) });
 
 export const REFERENCE_PATTERN = /\bWO-\d{3,7}\b/g;
+
+/** Whose work a workload lookup covers, so the model can say which numbers it is quoting. */
+export type WorkloadScope = "workspace" | "assignedToMe" | "reportedByMe";
+
+/** Managers see the whole workspace, technicians their own queue, everyone else their own reports. */
+export function workloadScope(role: Role): WorkloadScope {
+  if (role === Role.ADMIN || role === Role.COORDINATOR) return "workspace";
+  if (role === Role.TECHNICIAN) return "assignedToMe";
+  return "reportedByMe";
+}
+
+export interface WorkloadRow {
+  status: WorkOrderStatus;
+  ownerName: string | null;
+  count: number;
+}
+
+/** Folds grouped counts into per-status and per-owner totals; owners sorted by most open work first. */
+export function summarizeWorkload(rows: readonly WorkloadRow[]) {
+  const byStatus: Partial<Record<WorkOrderStatus, number>> = {};
+  const owners = new Map<string, number>();
+  let total = 0;
+  for (const row of rows) {
+    total += row.count;
+    byStatus[row.status] = (byStatus[row.status] ?? 0) + row.count;
+    const owner = row.ownerName ?? "Unassigned";
+    owners.set(owner, (owners.get(owner) ?? 0) + row.count);
+  }
+  const byOwner = [...owners].map(([owner, open]) => ({ owner, open })).sort((a, b) => b.open - a.open || a.owner.localeCompare(b.owner));
+  return { total, byStatus, byOwner };
+}

@@ -102,7 +102,3 @@ export function checkTransition(attempt: TransitionAttempt): TransitionCheck {
   }
   return { ok: true, rule };
 }
-
-export function transitionRequirements(from: WorkOrderStatus, to: WorkOrderStatus): readonly Requirement[] {
-  return findTransition(from, to)?.requires ?? [];
-}

@@ -52,12 +52,13 @@ async function WorkOrderDetail({
 }) {
   const user = await requirePageUser();
   const { id } = await params;
-  const { submitted } = await searchParams;
+  const { submitted, review } = await searchParams;
   const detail = await loadDetail(user, id);
   const { workOrder, permissions, relation } = detail;
   const now = new Date();
 
-  const inReview = workOrder.status === WorkOrderStatus.SUBMITTED && permissions.fields.includes("title");
+  // Only the reporter reviews their own draft here; coordinators get the full record with history and actions.
+  const inReview = workOrder.status === WorkOrderStatus.SUBMITTED && relation === "reporter" && permissions.fields.includes("title");
   const factors = {
     safetyFlag: workOrder.safetyFlag,
     essentialServiceDown: workOrder.essentialServiceDown,
@@ -70,7 +71,7 @@ async function WorkOrderDetail({
     <article>
       <Link
         href={relation === "reporter" ? "/app/my-work" : "/app/work-orders"}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink"
+        className="mb-2 -ml-1 inline-flex min-h-10 items-center gap-1.5 px-1 text-sm text-ink-muted hover:text-ink"
       >
         <ArrowLeftIcon size={14} aria-hidden />
         {relation === "reporter" ? "My reports" : "Work orders"}
@@ -136,7 +137,8 @@ async function WorkOrderDetail({
             }}
             categories={detail.categories}
             existingExtraction={detail.extraction}
-            autoDraft={false}
+            autoDraft={review === "draft" && !detail.extraction}
+            focusOnMount={review !== undefined}
           />
         </>
       ) : (
@@ -150,7 +152,9 @@ async function WorkOrderDetail({
                 <span className="font-mono text-[11px] text-ink-muted">unchanged since filing</span>
               </div>
               <figure className="px-4 py-4">
-                <blockquote className="text-[15px] leading-relaxed whitespace-pre-line">{workOrder.originalReport}</blockquote>
+                <blockquote className="text-[15px] leading-relaxed wrap-anywhere whitespace-pre-line">
+                  {workOrder.originalReport}
+                </blockquote>
                 <figcaption className="mt-2 text-xs text-ink-muted">
                   {workOrder.reporter.name} · {formatDateTime(workOrder.createdAt)}
                 </figcaption>
@@ -190,7 +194,7 @@ async function WorkOrderDetail({
                     <span className="font-mono text-[11px] text-ink-muted">{formatDateTime(workOrder.resolvedAt)}</span>
                   ) : null}
                 </div>
-                <p className="px-4 py-4 text-sm leading-relaxed whitespace-pre-line">{workOrder.resolutionNote}</p>
+                <p className="px-4 py-4 text-sm leading-relaxed wrap-anywhere whitespace-pre-line">{workOrder.resolutionNote}</p>
               </section>
             ) : null}
 
@@ -216,7 +220,7 @@ async function WorkOrderDetail({
                           {formatDateTime(note.createdAt)}
                         </time>
                       </p>
-                      <p className="mt-1 text-sm leading-relaxed whitespace-pre-line">{note.body}</p>
+                      <p className="mt-1 text-sm leading-relaxed wrap-anywhere whitespace-pre-line">{note.body}</p>
                     </div>
                   ))
                 )}
@@ -289,6 +293,18 @@ async function WorkOrderDetail({
                   <dt className="label-mono">Updated</dt>
                   <dd className="mt-0.5 font-mono">{formatDateTime(workOrder.updatedAt)}</dd>
                 </div>
+                {workOrder.closedAt ? (
+                  <div>
+                    <dt className="label-mono">Closed</dt>
+                    <dd className="mt-0.5 font-mono">{formatDateTime(workOrder.closedAt)}</dd>
+                  </div>
+                ) : null}
+                {workOrder.archivedAt ? (
+                  <div>
+                    <dt className="label-mono">Archived</dt>
+                    <dd className="mt-0.5 font-mono">{formatDateTime(workOrder.archivedAt)}</dd>
+                  </div>
+                ) : null}
               </dl>
             </section>
           </aside>

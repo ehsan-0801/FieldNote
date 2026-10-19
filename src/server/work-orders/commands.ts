@@ -2,10 +2,10 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { NoteKind, Role, WorkOrderStatus } from "@/generated/prisma/enums";
 import { EDITABLE_DETAIL_FIELDS, allowedNoteKinds, canTransitionStatus, editPermissions, type EditableDetailField } from "@/domain/access";
+import { draftTitle } from "@/domain/drafting";
 import { DomainError } from "@/domain/errors";
-import { NO_FACTORS, assessPriority, type PriorityFactorValues } from "@/domain/priority";
+import { NO_FACTORS, PRIORITY_FACTORS, assessPriority, type PriorityFactorValues } from "@/domain/priority";
 import type { CreateWorkOrderInput, NoteInput, TransitionInput, UpdateWorkOrderInput } from "@/domain/schemas";
-import { draftTitle } from "../ai/fallback";
 import { recordAudit } from "../audit";
 import { db, type Tx } from "../db";
 import type { ActorContext } from "../request-context";
@@ -117,12 +117,13 @@ export async function updateWorkOrder(ctx: ActorContext, id: string, input: Upda
         multiplePeopleAffected: true,
         worsening: true,
         priority: true,
+        priorityConfirmedAt: true,
         assigneeId: true,
         assignee: { select: { id: true, name: true } },
       },
     });
 
-    const data: Prisma.WorkOrderUncheckedUpdateInput = {};
+    const data: Prisma.WorkOrderUncheckedUpdateManyInput = {};
     const changes: Record<string, { from: string | null; to: string | null }> = {};
     if (input.title !== undefined && input.title !== current.title) {
       data.title = input.title;
@@ -142,18 +143,24 @@ export async function updateWorkOrder(ctx: ActorContext, id: string, input: Upda
 
     if (input.factors) {
       const factors: PriorityFactorValues = input.factors;
-      const assessment = assessPriority(factors);
-      Object.assign(data, factors, {
-        impactScore: assessment.score,
-        priority: assessment.priority,
-        priorityRationale: assessment.rationale,
-        ...(permissions.confirmsPriority ? { priorityConfirmedAt: new Date() } : {}),
-      });
-      await recordAudit(tx, {
-        ...auditBase(ctx, id),
-        action: permissions.confirmsPriority ? "work_order.priority_confirmed" : "work_order.updated",
-        details: { factors, priority: { from: current.priority, to: assessment.priority }, score: assessment.score },
-      });
+      const factorsChanged = PRIORITY_FACTORS.some((factor) => factors[factor.field] !== current[factor.field]);
+      // Saving identical factors is a no-op, except a manager confirming a not-yet-confirmed priority.
+      const confirming = permissions.confirmsPriority && (factorsChanged || !current.priorityConfirmedAt);
+      if (factorsChanged || confirming) {
+        const assessment = assessPriority(factors);
+        Object.assign(data, factors, {
+          impactScore: assessment.score,
+          priority: assessment.priority,
+          priorityRationale: assessment.rationale,
+          // A non-manager change is a proposal, so any earlier confirmation no longer applies.
+          priorityConfirmedAt: permissions.confirmsPriority ? new Date() : null,
+        });
+        await recordAudit(tx, {
+          ...auditBase(ctx, id),
+          action: permissions.confirmsPriority ? "work_order.priority_confirmed" : "work_order.updated",
+          details: { factors, priority: { from: current.priority, to: assessment.priority }, score: assessment.score },
+        });
+      }
     }
 
     if (input.assigneeId !== undefined && input.assigneeId !== current.assigneeId) {
@@ -164,11 +171,32 @@ export async function updateWorkOrder(ctx: ActorContext, id: string, input: Upda
         action: "work_order.assigned",
         details: { from: current.assignee, to: assignee },
       });
+      if (!assignee && OWNED_STATUSES.includes(facts.status)) {
+        data.status = WorkOrderStatus.TRIAGE;
+        await recordReturnToTriage(tx, ctx, id, facts.status);
+      }
     }
 
     if (Object.keys(data).length === 0) return { id, changed: false };
-    await tx.workOrder.update({ where: { id }, data });
+    // Conditional on the status the permissions were checked against, so a concurrent close or archive wins.
+    const updated = await tx.workOrder.updateMany({ where: { id, status: facts.status }, data });
+    if (updated.count === 0) throw new DomainError("CONFLICT", CHANGED_MEANWHILE);
     return { id, changed: true };
+  });
+}
+
+/** Statuses that only make sense with an owner; losing the owner sends the work back to triage. */
+export const OWNED_STATUSES: readonly WorkOrderStatus[] = [WorkOrderStatus.READY, WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.BLOCKED];
+
+const CHANGED_MEANWHILE = "This work order changed while you were viewing it. Reload and try again.";
+
+export async function recordReturnToTriage(tx: Tx, ctx: ActorContext, workOrderId: string, from: WorkOrderStatus) {
+  const reason = "Owner removed; back to triage for a new owner.";
+  await tx.statusEvent.create({ data: { workOrderId, actorId: ctx.actor.id, fromStatus: from, toStatus: WorkOrderStatus.TRIAGE, reason } });
+  await recordAudit(tx, {
+    ...auditBase(ctx, workOrderId),
+    action: "work_order.status_changed",
+    details: { from, to: WorkOrderStatus.TRIAGE, reason },
   });
 }
 
@@ -195,9 +223,7 @@ export async function transitionWorkOrder(ctx: ActorContext, id: string, input: 
 
     // Conditional on the status we checked, so two racing transitions can't both apply.
     const updated = await tx.workOrder.updateMany({ where: { id, status: facts.status }, data });
-    if (updated.count === 0) {
-      throw new DomainError("CONFLICT", "This work order changed while you were viewing it. Reload and try again.");
-    }
+    if (updated.count === 0) throw new DomainError("CONFLICT", CHANGED_MEANWHILE);
 
     await tx.statusEvent.create({
       data: {
@@ -228,11 +254,12 @@ export async function addWorkOrderNote(ctx: ActorContext, id: string, input: Not
     if (!allowedNoteKinds(ctx.actor, facts).includes(input.kind)) {
       throw new DomainError("FORBIDDEN", "You can’t add this kind of note to this work order.");
     }
+    const touched = await tx.workOrder.updateMany({ where: { id, status: facts.status }, data: { updatedAt: new Date() } });
+    if (touched.count === 0) throw new DomainError("CONFLICT", CHANGED_MEANWHILE);
     const note = await tx.workOrderNote.create({
       data: { workOrderId: id, authorId: ctx.actor.id, kind: input.kind, body: input.body },
       select: { id: true, kind: true, createdAt: true },
     });
-    await tx.workOrder.update({ where: { id }, data: { updatedAt: new Date() } });
     await recordAudit(tx, {
       ...auditBase(ctx, id),
       action: "work_order.note_added",

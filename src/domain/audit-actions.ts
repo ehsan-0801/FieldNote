@@ -10,17 +10,24 @@ export const AUDIT_ACTIONS = {
   "user.created": "created an account",
   "user.updated": "updated an account",
   "user.role_changed": "changed a role",
+  "user.password_reset": "reset a password",
   "user.deactivated": "deactivated an account",
   "user.reactivated": "reactivated an account",
   "category.created": "added a category",
   "category.updated": "updated a category",
+  "ai_provider.created": "added an AI provider",
+  "ai_provider.updated": "updated an AI provider",
+  "ai_provider.deleted": "deleted an AI provider",
+  "ai_provider.activated": "switched AI to a workspace provider",
+  "ai_provider.deactivated": "switched AI to the environment default",
+  "ai_provider.tested": "tested an AI provider",
   "auth.login": "signed in",
   "auth.login_failed": "failed to sign in",
   "auth.logout": "signed out",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
-export type AuditEntityType = "WorkOrder" | "User" | "Category" | "Session";
+export type AuditEntityType = "WorkOrder" | "User" | "Category" | "Session" | "AiProviderConfig";
 
 export const WORK_ORDER_HISTORY_ENTITIES: readonly AuditEntityType[] = ["WorkOrder", "Category"];
 

@@ -15,7 +15,7 @@ export function AdminOnly() {
           </Link>
         }
       >
-        People, categories and the full audit log are managed by workspace administrators.
+        People, categories, AI providers and the full audit log are managed by workspace administrators.
       </EmptyState>
     </div>
   );

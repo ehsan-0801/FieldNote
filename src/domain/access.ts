@@ -31,10 +31,6 @@ export function relationTo(actor: Actor, workOrder: WorkOrderAccessFacts): WorkO
   return null;
 }
 
-export function canViewWorkOrder(actor: Actor, workOrder: WorkOrderAccessFacts): boolean {
-  return relationTo(actor, workOrder) !== null;
-}
-
 /** Which rows a list query may return; translated to a Prisma filter by the service. */
 export type VisibilityScope = "workspace" | "assignedOrReported" | "reported";
 
@@ -73,15 +69,6 @@ export function editPermissions(actor: Actor, workOrder: WorkOrderAccessFacts): 
         ? { fields: EDITABLE_DETAIL_FIELDS, factors: true, confirmsPriority: false, assign: false }
         : NO_EDITS;
   }
-}
-
-export function canAssignWorkOrder(actor: Actor, workOrder: WorkOrderAccessFacts): boolean {
-  return editPermissions(actor, workOrder).assign;
-}
-
-export function canEditWorkOrder(actor: Actor, workOrder: WorkOrderAccessFacts): boolean {
-  const permissions = editPermissions(actor, workOrder);
-  return permissions.fields.length > 0 || permissions.factors || permissions.assign;
 }
 
 export interface StatusChangeRequest {

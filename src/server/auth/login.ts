@@ -2,15 +2,19 @@ import "server-only";
 import { DomainError } from "@/domain/errors";
 import { recordAudit } from "../audit";
 import { db } from "../db";
-import { enforceRateLimit } from "../rate-limit";
+import { isProduction } from "../env";
+import { assertUnderRateLimit, countAttempt, enforceRateLimit, pruneRateLimits } from "../rate-limit";
 import { verifyAgainstDummy, verifyPassword } from "./password";
 import { createSession, destroySession, resolveSessionToken } from "./session";
 
 const INVALID_CREDENTIALS = "That email and password don’t match an active account.";
+// Development seed passwords; production refuses to sign anyone in with them.
+const DEMO_PASSWORDS = new Set(["admin123", "fieldnote-demo-2026"]);
 
 interface LoginRequest {
   email: string;
   password: string;
+  rememberMe?: boolean;
   previousToken?: string;
   requestId: string;
   ipHash: string | null;
@@ -24,7 +28,7 @@ export async function login(request: LoginRequest) {
   // Without a client IP (no proxy header) a shared bucket would let anyone lock everybody out,
   // so only the per-account limit applies.
   if (request.ipHash) await enforceRateLimit("loginIp", request.ipHash);
-  await enforceRateLimit("loginEmail", request.email);
+  await assertUnderRateLimit("loginEmail", request.email);
 
   const user = await db.user.findUnique({
     where: { email: request.email },
@@ -32,7 +36,9 @@ export async function login(request: LoginRequest) {
   });
   const passwordOk = user ? await verifyPassword(request.password, user.passwordHash) : await verifyAgainstDummy(request.password);
 
-  if (!user || !passwordOk || !user.isActive) {
+  const demoPasswordInProduction = isProduction() && DEMO_PASSWORDS.has(request.password);
+  if (!user || !passwordOk || !user.isActive || demoPasswordInProduction) {
+    await countAttempt("loginEmail", request.email);
     if (user) {
       await recordAudit(db, {
         workspaceId: user.workspaceId,
@@ -42,14 +48,16 @@ export async function login(request: LoginRequest) {
         entityId: user.id,
         requestId: request.requestId,
         ipHash: request.ipHash,
-        details: { reason: user.isActive ? "bad_password" : "inactive" },
+        details: { reason: !user.isActive ? "inactive" : demoPasswordInProduction && passwordOk ? "demo_password" : "bad_password" },
       });
     }
     throw new DomainError("UNAUTHENTICATED", INVALID_CREDENTIALS);
   }
 
   await destroySession(request.previousToken);
-  const session = await createSession(user.id);
+  // Opportunistic housekeeping on sign-in keeps session and rate-limit tables small.
+  await Promise.all([db.session.deleteMany({ where: { expiresAt: { lt: new Date() } } }), pruneRateLimits()]);
+  const session = await createSession(user.id, request.rememberMe === true);
   await recordAudit(db, {
     workspaceId: user.workspaceId,
     actorId: user.id,

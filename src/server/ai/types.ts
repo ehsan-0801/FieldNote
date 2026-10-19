@@ -13,6 +13,31 @@ export interface ExtractionInput {
   categories: readonly CategoryOption[];
 }
 
+export interface ChatTurn {
+  role: "user" | "model";
+  text: string;
+}
+
+/** One JSON-only completion. Each adapter enforces the schema as far as its model allows. */
+export interface JsonRequest {
+  system: string;
+  turns: readonly ChatTurn[];
+  schemaName: string;
+  /** Standard JSON Schema (all keys required, no extras). */
+  jsonSchema: Record<string, unknown>;
+  /** The same schema in Gemini's OpenAPI subset. */
+  geminiSchema: Record<string, unknown>;
+  temperature: number;
+  signal: AbortSignal;
+}
+
+export interface JsonCompleter {
+  readonly name: string;
+  readonly model: string;
+  /** Returns the raw text the model produced; parsing and validation happen in the caller. */
+  complete(request: JsonRequest): Promise<string>;
+}
+
 export interface ReportExtractionProvider {
   readonly name: string;
   readonly model: string;
@@ -25,12 +50,15 @@ export type ProviderFailureCode = Extract<AiErrorCode, "TIMEOUT" | "RATE_LIMITED
 export class ProviderFailure extends Error {
   readonly code: ProviderFailureCode;
   readonly retryable: boolean;
+  /** Upstream HTTP status when there was one; used to explain connection tests, never shown raw. */
+  readonly httpStatus: number | null;
 
-  constructor(code: ProviderFailureCode, retryable: boolean, detail: string) {
+  constructor(code: ProviderFailureCode, retryable: boolean, detail: string, httpStatus: number | null = null) {
     super(detail);
     this.name = "ProviderFailure";
     this.code = code;
     this.retryable = retryable;
+    this.httpStatus = httpStatus;
   }
 }
 

@@ -37,7 +37,7 @@ async function scopeWhere(actor: Actor): Promise<Prisma.AuditEventWhereInput> {
 }
 
 /** Activity stream for /app/activity and the overview, limited to what the actor may see. */
-export async function listActivity(actor: Actor, page = 1) {
+export async function listActivity(actor: Actor, page = 1, pageSize = AUDIT_PAGE_SIZE) {
   const where = await scopeWhere(actor);
   const [total, events] = await Promise.all([
     db.auditEvent.count({ where }),
@@ -45,15 +45,16 @@ export async function listActivity(actor: Actor, page = 1) {
       where,
       select: auditSelect,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      skip: (page - 1) * AUDIT_PAGE_SIZE,
-      take: AUDIT_PAGE_SIZE,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     }),
   ]);
   return {
     events,
     total,
     page,
-    pageCount: Math.max(1, Math.ceil(total / AUDIT_PAGE_SIZE)),
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
     references: await referencesFor(actor, events),
   };
 }
@@ -86,7 +87,16 @@ export async function listAuditLog(actor: Actor, query: AuditQuery) {
   };
 }
 
-export type AuditListEvent = Prisma.AuditEventGetPayload<{ select: typeof auditSelect }>;
+/** People to filter the audit log by; administrators only. */
+export async function listAuditActors(actor: Actor) {
+  if (!canManageWorkspace(actor)) throw new DomainError("FORBIDDEN", "Only administrators can open the audit log.");
+  return db.user.findMany({
+    where: { workspaceId: actor.workspaceId },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+    take: 500,
+  });
+}
 
 async function referencesFor(actor: Actor, events: { entityType: string; entityId: string }[]) {
   const ids = [...new Set(events.filter((event) => event.entityType === "WorkOrder").map((event) => event.entityId))];

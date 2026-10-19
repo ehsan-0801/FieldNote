@@ -9,6 +9,8 @@ export interface TurnOptions {
   history: readonly ChatTurn[];
   runTool: (step: AssistantStep) => Promise<string>;
   timeoutMs: number;
+  /** Total time for the whole turn; each call gets whatever remains, up to timeoutMs. */
+  budgetMs?: number;
   /** Model calls per user message, including tool rounds. */
   maxCalls?: number;
 }
@@ -32,10 +34,14 @@ export async function runAssistantTurn(options: TurnOptions): Promise<TurnResult
   let formatRetried = false;
   let transientRetried = false;
 
+  const deadline = startedAt + (options.budgetMs ?? options.timeoutMs * maxCalls);
+
   for (let call = 1; call <= maxCalls; call++) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return { ok: false, reason: "TIMEOUT", toolCalls, latencyMs: Date.now() - startedAt };
     let text: string;
     try {
-      text = await options.provider.complete(options.system, turns, AbortSignal.timeout(options.timeoutMs));
+      text = await options.provider.complete(options.system, turns, AbortSignal.timeout(Math.min(options.timeoutMs, remaining)));
     } catch (error) {
       const failure = error instanceof ProviderFailure ? error : new ProviderFailure("PROVIDER_ERROR", false, "unexpected error");
       if (failure.retryable && !transientRetried) {
@@ -57,6 +63,8 @@ export async function runAssistantTurn(options: TurnOptions): Promise<TurnResult
     const wantsTool = step.step === "tool" && step.tool !== "none";
     if (!wantsTool) return { ok: true, step, toolCalls, latencyMs: Date.now() - startedAt };
 
+    // No call left to use a lookup result, so don't run it.
+    if (call === maxCalls) break;
     const isLastCall = call >= maxCalls - 1;
     toolCalls.push(step.tool);
     const result = await options.runTool(step);

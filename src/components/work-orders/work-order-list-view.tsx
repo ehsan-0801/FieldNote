@@ -33,6 +33,8 @@ export async function WorkOrderListView({
   return (
     <>
       <FilterBar
+        // Remount when the URL's filters change (e.g. "Clear filters"), since selects only read defaultValue once.
+        key={JSON.stringify(query)}
         action={basePath}
         query={query}
         categories={options.categories}
@@ -76,6 +78,8 @@ export async function WorkOrderListView({
             category: query.category,
             owner: fixed.owner ? undefined : query.owner,
             sort: query.sort,
+            dir: query.dir,
+            pageSize: String(query.pageSize),
           }}
           page={result.page}
           pageCount={result.pageCount}

@@ -30,7 +30,8 @@ async function Assistant({ searchParams }: { searchParams: PageProps<"/app/assis
   const user = await requirePageUser();
   const { c } = await searchParams;
   const conversationId = conversationParam.parse(Array.isArray(c) ? c[0] : c);
-  const [conversations, conversation] = await Promise.all([
+  const [available, conversations, conversation] = await Promise.all([
+    isAssistantAvailable(user.workspaceId),
     listConversations(user),
     conversationId
       ? getConversation(user, conversationId).catch((error: unknown) => {
@@ -43,7 +44,7 @@ async function Assistant({ searchParams }: { searchParams: PageProps<"/app/assis
   return (
     <AssistantChat
       key={conversation?.id ?? "new"}
-      available={isAssistantAvailable()}
+      available={available}
       unavailableMessage={ASSISTANT_UNAVAILABLE}
       conversations={conversations.map((item) => ({ id: item.id, title: item.title, updatedAt: item.updatedAt.toISOString() }))}
       conversation={conversation}

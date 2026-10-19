@@ -8,7 +8,9 @@ import { DomainError } from "@/domain/errors";
 import { db } from "../db";
 import { isProduction } from "../env";
 
-export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** "Remember me" keeps a session for 30 days; otherwise it lasts one day. */
+export const SESSION_TTL_MS = { remembered: 30 * DAY_MS, standard: DAY_MS } as const;
 const TOUCH_INTERVAL_MS = 5 * 60 * 1000;
 
 /** `__Host-` forces Secure, Path=/ and no Domain, which is what we want in production. */
@@ -39,9 +41,9 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
+export async function createSession(userId: string, remember = false): Promise<{ token: string; expiresAt: Date }> {
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const expiresAt = new Date(Date.now() + (remember ? SESSION_TTL_MS.remembered : SESSION_TTL_MS.standard));
   await db.session.create({ data: { tokenHash: hashToken(token), userId, expiresAt } });
   return { token, expiresAt };
 }

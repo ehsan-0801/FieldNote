@@ -38,6 +38,9 @@ export async function callApi<T>(
       credentials: "same-origin",
     });
   } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      return { ok: false, error: { code: "TIMEOUT", message: "This took too long to answer. Try again." } };
+    }
     if (error instanceof DOMException && error.name === "AbortError") {
       return { ok: false, error: { code: "ABORTED", message: "Cancelled." } };
     }

@@ -20,8 +20,15 @@ export function hashIp(ip: string | null): string | null {
   return createHmac("sha256", serverEnv().SESSION_SECRET).update(ip).digest("hex").slice(0, 32);
 }
 
+/**
+ * Client IP for rate limiting. Prefers headers set by the platform (Vercel) over
+ * X-Forwarded-For, and from X-Forwarded-For takes the right-most entry, which is
+ * the one added by the nearest proxy rather than one a client can prepend.
+ */
 export function clientIp(headers: Headers): string | null {
+  const platform = headers.get("x-vercel-forwarded-for") ?? headers.get("x-real-ip");
+  if (platform) return platform.split(",")[0]?.trim() || null;
   const forwarded = headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]?.trim() || null;
-  return headers.get("x-real-ip");
+  if (!forwarded) return null;
+  return forwarded.split(",").at(-1)?.trim() || null;
 }

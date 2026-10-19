@@ -33,12 +33,16 @@ const ROLE_EFFECT: Record<Role, string> = {
 /** Role editor with an explicit confirmation that explains what changes and that sessions end. */
 function UserRoleEditor({ user, isSelf }: { user: ManagedUser; isSelf: boolean }) {
   const [role, setRole] = useState<Role>(user.role);
-  const [confirming, setConfirming] = useState<"role" | "active" | null>(null);
+  const [confirming, setConfirming] = useState<"role" | "active" | "password" | null>(null);
+  const [newPassword, setNewPassword] = useState("");
   const action = useApiAction();
 
-  async function apply(body: { role?: Role; isActive?: boolean }) {
+  async function apply(body: { role?: Role; isActive?: boolean; password?: string }) {
     const result = await action.run(`/api/admin/users/${user.id}`, "PATCH", body, anyData);
-    return result.ok ? null : result.error.message;
+    if (result.ok) return null;
+    // Show the specific field problem (e.g. a weak password) rather than the generic summary.
+    const firstFieldError = Object.values(result.error.fieldErrors ?? {})[0]?.[0];
+    return firstFieldError ?? result.error.message;
   }
 
   if (isSelf) return <span className="text-xs text-ink-muted">This is you</span>;
@@ -70,6 +74,9 @@ function UserRoleEditor({ user, isSelf }: { user: ManagedUser; isSelf: boolean }
       >
         {user.isActive ? "Deactivate" : "Reactivate"}
       </button>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirming("password")}>
+        Reset password
+      </button>
 
       <ConfirmActionDialog
         open={confirming === "role"}
@@ -97,6 +104,31 @@ function UserRoleEditor({ user, isSelf }: { user: ManagedUser; isSelf: boolean }
         tone={user.isActive ? "danger" : "primary"}
         onConfirm={() => apply({ isActive: !user.isActive })}
       />
+      <ConfirmActionDialog
+        open={confirming === "password"}
+        onClose={() => (setConfirming(null), setNewPassword(""))}
+        title={`Reset ${user.name}’s password?`}
+        description="Set a temporary password and share it with them privately. They are signed out everywhere."
+        confirmLabel="Reset password"
+        onConfirm={() =>
+          newPassword.length < PASSWORD_MIN_LENGTH
+            ? Promise.resolve(`Use at least ${PASSWORD_MIN_LENGTH} characters.`)
+            : apply({ password: newPassword })
+        }
+      >
+        <label htmlFor={`password-${user.id}`} className="field-label">
+          New temporary password
+        </label>
+        <input
+          id={`password-${user.id}`}
+          type="password"
+          autoComplete="new-password"
+          className="input"
+          value={newPassword}
+          onChange={(event) => setNewPassword(event.target.value)}
+        />
+        <p className="field-hint">At least {PASSWORD_MIN_LENGTH} characters. It is stored only as a hash.</p>
+      </ConfirmActionDialog>
     </div>
   );
 }
@@ -183,8 +215,8 @@ function CreateUserForm() {
 
 export function UserManager({ users, currentUserId }: { users: ManagedUser[]; currentUserId: string }) {
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-      <section className="panel overflow-x-auto" aria-label="People">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <section className="panel relative min-w-0 overflow-x-auto" aria-label="People">
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead>
             <tr className="border-b border-rule">
@@ -210,7 +242,7 @@ export function UserManager({ users, currentUserId }: { users: ManagedUser[]; cu
                   {user.assignedCount} assigned · {user.reportedCount} reported
                 </td>
                 <td className="px-4 py-3">
-                  <UserRoleEditor user={user} isSelf={user.id === currentUserId} />
+                  <UserRoleEditor key={`${user.id}:${user.role}:${user.isActive}`} user={user} isSelf={user.id === currentUserId} />
                 </td>
               </tr>
             ))}

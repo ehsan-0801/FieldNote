@@ -55,39 +55,49 @@ enum AssistantActionStatus {
   FAILED
 }
 
+// Values are the provider identifiers used in code and in AiExtraction.provider.
+enum AiProviderKind {
+  gemini
+  groq
+  anthropic
+  openai_compatible
+}
+
 model Workspace {
-  id                  String       @id @default(cuid())
+  id                  String             @id @default(cuid())
   name                String
-  slug                String       @unique
+  slug                String             @unique
   // Next number handed out for WO-#### references; incremented atomically.
-  nextReferenceNumber Int          @default(1001)
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  nextReferenceNumber Int                @default(1001)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
   users               User[]
   categories          Category[]
   workOrders          WorkOrder[]
   auditEvents         AuditEvent[]
   conversations       ChatConversation[]
+  aiProviderConfigs   AiProviderConfig[]
 }
 
 model User {
-  id                 String          @id @default(cuid())
+  id                 String             @id @default(cuid())
   workspaceId        String
-  email              String          @unique
+  email              String             @unique
   name               String
   passwordHash       String
-  role               Role            @default(REPORTER)
-  isActive           Boolean         @default(true)
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  workspace          Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
-  reportedWorkOrders WorkOrder[]     @relation("Reporter")
-  assignedWorkOrders WorkOrder[]     @relation("Assignee")
+  role               Role               @default(REPORTER)
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  reportedWorkOrders WorkOrder[]        @relation("Reporter")
+  assignedWorkOrders WorkOrder[]        @relation("Assignee")
   notes              WorkOrderNote[]
-  auditEvents        AuditEvent[]    @relation("AuditActor")
-  statusEvents       StatusEvent[]   @relation("StatusActor")
+  auditEvents        AuditEvent[]       @relation("AuditActor")
+  statusEvents       StatusEvent[]      @relation("StatusActor")
   sessions           Session[]
   conversations      ChatConversation[]
+  aiProviderConfigs  AiProviderConfig[] @relation("AiProviderCreator")
 
   @@index([workspaceId, role, isActive])
 }
@@ -278,4 +288,29 @@ model ChatMessage {
   conversation   ChatConversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
+}
+
+// AI provider settings an administrator manages in the app. The API key is stored
+// encrypted (AES-256-GCM, see src/server/ai/key-crypto.ts) and never sent to a client;
+// keyLast4 is the only part of it that is ever displayed. At most one row per
+// workspace is active; with none active the environment configuration applies.
+model AiProviderConfig {
+  id              String         @id @default(cuid())
+  workspaceId     String
+  label           String
+  provider        AiProviderKind
+  model           String
+  encryptedApiKey String
+  keyLast4        String
+  // Required for openai_compatible: a preset's URL (e.g. https://api.openai.com/v1) or the admin's own; unused otherwise.
+  baseUrl         String?
+  isActive        Boolean        @default(false)
+  createdById     String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  createdBy       User?          @relation("AiProviderCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, label])
+  @@index([workspaceId, isActive])
 }

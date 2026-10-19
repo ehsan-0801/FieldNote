@@ -15,7 +15,7 @@ export function useApiAction() {
   const [error, setError] = useState<ApiFailure | null>(null);
 
   const run = useCallback(
-    async <T>(path: string, method: "POST" | "PATCH", body: unknown, schema: z.ZodType<T>): Promise<ApiResult<T>> => {
+    async <T>(path: string, method: "POST" | "PATCH" | "DELETE", body: unknown, schema: z.ZodType<T>): Promise<ApiResult<T>> => {
       setPending(true);
       setError(null);
       const result = await callApi(path, { method, body, schema });

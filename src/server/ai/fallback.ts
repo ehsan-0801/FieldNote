@@ -1,5 +1,6 @@
 import type { EvidenceSignal, ExtractionSuggestion } from "@/domain/extraction";
 import { PRIORITY_SIGNALS, assessPriority, factorsFromSignals, type PrioritySignal } from "@/domain/priority";
+import { draftTitle } from "@/domain/drafting";
 import type { ExtractionInput } from "./types";
 
 export const FALLBACK_PROVIDER = "rules";
@@ -57,18 +58,6 @@ export function ruleBasedExtraction(input: ExtractionInput): ExtractionSuggestio
       : "Coordinator to confirm the category and priority, then assign a technician.",
     confidence: null,
   };
-}
-
-export function draftTitle(text: string): string {
-  const firstSentence = text.split(/(?<=[.!?])\s/)[0] ?? text;
-  const cleaned = firstSentence.replace(/[.!?]+$/, "");
-  if (cleaned.length <= 80) return capitalize(cleaned);
-  const cut = cleaned.slice(0, 80);
-  return `${capitalize(cut.slice(0, cut.lastIndexOf(" ") > 40 ? cut.lastIndexOf(" ") : 80))}…`;
-}
-
-function capitalize(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function guessCategory(text: string, availableSlugs: readonly string[]): string | null {

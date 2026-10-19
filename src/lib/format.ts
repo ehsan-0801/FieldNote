@@ -26,7 +26,3 @@ export function formatAge(value: Date | string, now: Date = new Date()): string 
   if (days < 30) return `${days}d ago`;
   return formatDate(value);
 }
-
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : plural}`;
-}

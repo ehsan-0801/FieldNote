@@ -33,6 +33,8 @@ export function Dialog({
     if (open && !dialog.open) {
       opener.current = document.activeElement;
       dialog.showModal();
+      // Start on the first field when there is one, not on the close button.
+      dialog.querySelector<HTMLElement>("[data-dialog-body] :is(input, textarea, select)")?.focus();
     } else if (!open && dialog.open) {
       dialog.close();
     }
@@ -48,6 +50,15 @@ export function Dialog({
     dialog.addEventListener("close", handleClose);
     return () => dialog.removeEventListener("close", handleClose);
   }, [onClose]);
+
+  // Parents may unmount an open dialog (Cancel, or after a successful submit) without a
+  // native "close" event; focus still has to go back to whatever opened it.
+  useEffect(() => {
+    const dialog = ref.current;
+    return () => {
+      if (dialog?.open && opener.current instanceof HTMLElement) opener.current.focus();
+    };
+  }, []);
 
   const position =
     placement === "sheet"
@@ -72,14 +83,16 @@ export function Dialog({
         </div>
         <button
           type="button"
-          className="btn btn-ghost btn-sm -mt-1 -mr-2 px-2"
+          className="btn btn-ghost -mt-1.5 -mr-2.5 size-10 px-0"
           onClick={() => ref.current?.close()}
           aria-label="Close dialog"
         >
           <XIcon size={16} aria-hidden />
         </button>
       </div>
-      <div className="px-5 py-4">{children}</div>
+      <div data-dialog-body className="px-5 py-4">
+        {children}
+      </div>
     </dialog>
   );
 }

@@ -30,6 +30,7 @@ export function DetailsEditor({
 }) {
   const [editing, setEditing] = useState(false);
   const [values, setValues] = useState(details);
+  const [titleError, setTitleError] = useState<string | null>(null);
   const action = useApiAction();
   const can = (field: EditableDetailField) => editable.includes(field);
 
@@ -40,7 +41,11 @@ export function DetailsEditor({
       const next = values[field];
       if (next !== details[field]) body[field] = typeof next === "string" ? next.trim() || null : next;
     }
-    if (body.title === null) delete body.title;
+    if (body.title === null) {
+      setTitleError("Give the work order a short title.");
+      return;
+    }
+    setTitleError(null);
     if (Object.keys(body).length === 0) return setEditing(false);
     const result = await action.run(`/api/work-orders/${workOrderId}`, "PATCH", body, anyData);
     if (result.ok) setEditing(false);
@@ -94,9 +99,13 @@ export function DetailsEditor({
             onChange={set("title")}
             maxLength={100}
             required
-            aria-invalid={Boolean(fieldError(action.error, "title"))}
+            aria-invalid={Boolean(titleError ?? fieldError(action.error, "title"))}
           />
-          <p className="field-error">{fieldError(action.error, "title") ?? ""}</p>
+          {(titleError ?? fieldError(action.error, "title")) ? (
+            <p className="field-error" role="alert">
+              {titleError ?? fieldError(action.error, "title")}
+            </p>
+          ) : null}
         </div>
       ) : null}
       {can("summary") ? (

@@ -39,7 +39,13 @@ export const priorityFactorsSchema = z.strictObject({
 export const updateWorkOrderSchema = z
   .strictObject({
     title: z.string().trim().min(3, { error: "Give the work order a short title." }).max(100).optional(),
-    summary: z.string().trim().max(600).nullable().optional(),
+    summary: z
+      .string()
+      .trim()
+      .max(600)
+      .transform((value) => value || null)
+      .nullable()
+      .optional(),
     categoryId: z.string().trim().min(1).max(40).nullable().optional(),
     locationLabel: optionalLabel(120),
     assetLabel: optionalLabel(120),
@@ -103,12 +109,17 @@ export const loginSchema = z.strictObject({
     .max(200)
     .pipe(z.email({ error: "Enter the email you sign in with." })),
   password: z.string().min(1, { error: "Enter your password." }).max(200),
+  rememberMe: z.boolean().default(false),
 });
 
 export const PASSWORD_MIN_LENGTH = 12;
 
 export const createUserSchema = z.strictObject({
-  name: z.string().trim().min(2).max(80),
+  name: z
+    .string()
+    .trim()
+    .min(2, { error: "Enter a name of at least 2 characters." })
+    .max(80, { error: "Keep the name under 80 characters." }),
   email: z
     .string()
     .trim()
@@ -119,14 +130,31 @@ export const createUserSchema = z.strictObject({
   password: z
     .string()
     .min(PASSWORD_MIN_LENGTH, { error: `Use at least ${PASSWORD_MIN_LENGTH} characters.` })
+    .refine((value) => value.trim().length >= PASSWORD_MIN_LENGTH, {
+      error: `Use at least ${PASSWORD_MIN_LENGTH} characters that aren’t spaces.`,
+    })
     .max(128),
 });
 
 export const updateUserSchema = z
   .strictObject({
-    name: z.string().trim().min(2).max(80).optional(),
+    name: z
+      .string()
+      .trim()
+      .min(2, { error: "Enter a name of at least 2 characters." })
+      .max(80, { error: "Keep the name under 80 characters." })
+      .optional(),
     role: z.enum(Role).optional(),
     isActive: z.boolean().optional(),
+    /** Admin-set replacement password; the person is signed out everywhere. */
+    password: z
+      .string()
+      .min(PASSWORD_MIN_LENGTH, { error: `Use at least ${PASSWORD_MIN_LENGTH} characters.` })
+      .refine((value) => value.trim().length >= PASSWORD_MIN_LENGTH, {
+        error: `Use at least ${PASSWORD_MIN_LENGTH} characters that aren’t spaces.`,
+      })
+      .max(128)
+      .optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { error: "Nothing to update." });
 
@@ -138,7 +166,13 @@ export const createCategorySchema = z.strictObject({
 export const updateCategorySchema = z
   .strictObject({
     name: z.string().trim().min(2).max(60).optional(),
-    description: z.string().trim().max(200).nullable().optional(),
+    description: z
+      .string()
+      .trim()
+      .max(200)
+      .transform((value) => value || null)
+      .nullable()
+      .optional(),
     isActive: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { error: "Nothing to update." });
@@ -146,7 +180,7 @@ export const updateCategorySchema = z
 export const auditQuerySchema = z.object({
   action: z.preprocess(emptyToUndefined, z.string().max(60).optional()),
   actor: z.preprocess(emptyToUndefined, z.string().max(40).optional()),
-  entity: z.preprocess(emptyToUndefined, z.enum(["WorkOrder", "User", "Category", "Session"]).optional()),
+  entity: z.preprocess(emptyToUndefined, z.enum(["WorkOrder", "User", "Category", "Session", "AiProviderConfig"]).optional()),
   page: z.preprocess(emptyToUndefined, z.coerce.number().int().min(1).max(10_000).default(1)),
 });
 export type AuditQuery = z.infer<typeof auditQuerySchema>;

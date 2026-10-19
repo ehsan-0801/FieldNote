@@ -13,8 +13,7 @@ import { auditQuerySchema } from "@/domain/schemas";
 import { describeAuditDetails } from "@/lib/audit-describe";
 import { formatDateTime } from "@/lib/format";
 import { requirePageUser } from "@/server/auth/session";
-import { listAuditLog } from "@/server/audit-log";
-import { db } from "@/server/db";
+import { listAuditActors, listAuditLog } from "@/server/audit-log";
 
 export const metadata: Metadata = { title: "Audit log" };
 
@@ -32,10 +31,7 @@ async function AuditLog({ searchParams }: { searchParams: PageProps<"/app/admin/
   if (!canManageWorkspace(user)) return <AdminOnly />;
   const parsed = auditQuerySchema.safeParse(await searchParams);
   const query = parsed.success ? parsed.data : auditQuerySchema.parse({});
-  const [log, people] = await Promise.all([
-    listAuditLog(user, query),
-    db.user.findMany({ where: { workspaceId: user.workspaceId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
-  ]);
+  const [log, people] = await Promise.all([listAuditLog(user, query), listAuditActors(user)]);
   const filtered = Boolean(query.action || query.actor || query.entity);
 
   return (
@@ -81,6 +77,7 @@ async function AuditLog({ searchParams }: { searchParams: PageProps<"/app/admin/
             <option value="User">People</option>
             <option value="Category">Categories</option>
             <option value="Session">Sign-ins</option>
+            <option value="AiProviderConfig">AI providers</option>
           </select>
         </div>
         <div className="flex gap-2">
@@ -95,7 +92,7 @@ async function AuditLog({ searchParams }: { searchParams: PageProps<"/app/admin/
         </div>
       </form>
 
-      <section className="panel overflow-x-auto">
+      <section className="panel relative min-w-0 overflow-x-auto">
         {log.events.length === 0 ? (
           <EmptyState icon={ScrollIcon} title={filtered ? "No entries match these filters." : "No audit entries yet."} />
         ) : (
@@ -114,7 +111,14 @@ async function AuditLog({ searchParams }: { searchParams: PageProps<"/app/admin/
                 const target = event.entityType === "WorkOrder" ? log.references[event.entityId] : undefined;
                 return (
                   <tr key={event.id} className="border-b border-rule align-top last:border-b-0">
-                    <td className="px-4 py-2.5 font-mono text-xs whitespace-nowrap text-ink-muted">{formatDateTime(event.createdAt)}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs whitespace-nowrap text-ink-muted">
+                      {formatDateTime(event.createdAt)}
+                      {event.requestId ? (
+                        <span className="block text-[10.5px]" title="Request ID, for matching server logs">
+                          req {event.requestId.slice(0, 8)}
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-2.5">{event.actor?.name ?? "System"}</td>
                     <td className="px-4 py-2.5">
                       <span className="font-mono text-xs">{event.action}</span>

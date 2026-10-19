@@ -63,7 +63,11 @@ function CategoryRow({ category }: { category: ManagedCategory }) {
             <button type="submit" className="btn btn-primary btn-sm" disabled={action.pending}>
               Save
             </button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing(false)}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => (setEditing(false), setName(category.name), setDescription(category.description ?? ""), action.clearError())}
+            >
               Cancel
             </button>
           </div>
@@ -131,7 +135,7 @@ export function CategoryManager({ categories }: { categories: ManagedCategory[] 
       <section className="panel" aria-label="Categories">
         <ul className="divide-y divide-rule">
           {categories.map((category) => (
-            <CategoryRow key={category.id} category={category} />
+            <CategoryRow key={`${category.id}:${category.name}:${category.isActive}`} category={category} />
           ))}
         </ul>
       </section>

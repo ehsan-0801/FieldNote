@@ -14,6 +14,27 @@ const envSchema = z.object({
       .optional(),
   ),
   SESSION_SECRET: z.string().min(32, { error: "SESSION_SECRET must be at least 32 characters." }),
+  /**
+   * Encrypts AI provider keys stored in the database. Optional: without it the key is
+   * derived from SESSION_SECRET, which then can't be rotated without re-entering those keys.
+   */
+  AI_KEYS_SECRET: z.preprocess(
+    emptyToUndefined,
+    z.string().min(32, { error: "AI_KEYS_SECRET must be at least 32 characters." }).optional(),
+  ),
+  /** Comma-separated origins allowed to make state-changing requests, e.g. https://fieldnote.example.org. */
+  APP_ORIGIN: z.preprocess(
+    (value) => (typeof value === "string" ? value : ""),
+    z
+      .string()
+      .transform((value) =>
+        value
+          .split(",")
+          .map((origin) => origin.trim().replace(/\/+$/, ""))
+          .filter(Boolean),
+      )
+      .pipe(z.array(z.url({ error: "APP_ORIGIN must be a list of absolute origins." }))),
+  ),
   AI_PROVIDER: z.preprocess(emptyToUndefined, z.enum(["gemini", "groq", "none"]).default("gemini")),
   GEMINI_API_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
   GEMINI_MODEL: z.preprocess(emptyToUndefined, z.string().default("gemini-flash-latest")),

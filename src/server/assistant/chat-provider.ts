@@ -1,13 +1,15 @@
-import { z } from "zod";
 import { ASSISTANT_TOOLS, PROPOSAL_ACTIONS } from "@/domain/assistant";
 import type { ServerEnv } from "../env";
-import { postJson, type FetchLike } from "../ai/providers";
-import { ProviderFailure } from "../ai/types";
+import {
+  GROQ_BASE_URL,
+  createGeminiCompleter,
+  createOpenAiCompatibleCompleter,
+  type FetchLike,
+  type OpenAiCompatibleConfig,
+} from "../ai/providers";
+import type { ChatTurn, JsonCompleter } from "../ai/types";
 
-export interface ChatTurn {
-  role: "user" | "model";
-  text: string;
-}
+export type { ChatTurn };
 
 /** Multi-turn JSON completion. Parsing and validation of the returned text happen in the engine. */
 export interface ChatProvider {
@@ -77,60 +79,35 @@ function stepGeminiSchema() {
   };
 }
 
-const geminiResponse = z.object({
-  candidates: z.array(z.object({ content: z.object({ parts: z.array(z.object({ text: z.string().optional() })) }) })).min(1),
-});
-
-export function createGeminiChat(apiKey: string, model: string, fetcher: FetchLike = fetch): ChatProvider {
+/** The assistant's step protocol on top of any completer. */
+export function chatProviderFrom(completer: JsonCompleter): ChatProvider {
   return {
-    name: "gemini",
-    model,
-    async complete(system, turns, signal) {
-      const json = await postJson(
-        fetcher,
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-        { "x-goog-api-key": apiKey },
-        {
-          systemInstruction: { parts: [{ text: system }] },
-          contents: turns.map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] })),
-          generationConfig: { temperature: 0.4, responseMimeType: "application/json", responseSchema: stepGeminiSchema() },
-        },
+    name: completer.name,
+    model: completer.model,
+    complete(system, turns, signal) {
+      return completer.complete({
+        system,
+        turns,
+        schemaName: "assistant_step",
+        jsonSchema: stepJsonSchema(),
+        geminiSchema: stepGeminiSchema(),
+        temperature: 0.4,
         signal,
-      );
-      const parsed = geminiResponse.safeParse(json);
-      if (!parsed.success) throw new ProviderFailure("PROVIDER_ERROR", false, "unexpected response shape");
-      return parsed.data.candidates[0].content.parts.map((part) => part.text ?? "").join("");
+      });
     },
   };
 }
 
-const groqResponse = z.object({ choices: z.array(z.object({ message: z.object({ content: z.string().nullable() }) })).min(1) });
+export function createGeminiChat(apiKey: string, model: string, fetcher: FetchLike = fetch): ChatProvider {
+  return chatProviderFrom(createGeminiCompleter(apiKey, model, fetcher));
+}
+
+export function createOpenAiCompatibleChat(config: OpenAiCompatibleConfig, fetcher: FetchLike = fetch): ChatProvider {
+  return chatProviderFrom(createOpenAiCompatibleCompleter(config, fetcher));
+}
 
 export function createGroqChat(apiKey: string, model: string, fetcher: FetchLike = fetch): ChatProvider {
-  return {
-    name: "groq",
-    model,
-    async complete(system, turns, signal) {
-      const json = await postJson(
-        fetcher,
-        "https://api.groq.com/openai/v1/chat/completions",
-        { authorization: `Bearer ${apiKey}` },
-        {
-          model,
-          temperature: 0.4,
-          messages: [
-            { role: "system", content: system },
-            ...turns.map((turn) => ({ role: turn.role === "model" ? "assistant" : "user", content: turn.text })),
-          ],
-          response_format: { type: "json_schema", json_schema: { name: "assistant_step", strict: true, schema: stepJsonSchema() } },
-        },
-        signal,
-      );
-      const parsed = groqResponse.safeParse(json);
-      if (!parsed.success) throw new ProviderFailure("PROVIDER_ERROR", false, "unexpected response shape");
-      return parsed.data.choices[0].message.content ?? "";
-    },
-  };
+  return createOpenAiCompatibleChat({ name: "groq", apiKey, model, baseUrl: GROQ_BASE_URL }, fetcher);
 }
 
 /** Uses the same provider switch as report drafting. Null means the assistant is unavailable. */

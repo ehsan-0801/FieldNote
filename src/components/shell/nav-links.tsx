@@ -6,6 +6,7 @@ import {
   ChatCircleTextIcon,
   ClipboardTextIcon,
   ClockCounterClockwiseIcon,
+  PlugsConnectedIcon,
   PlusIcon,
   ScrollIcon,
   SquaresFourIcon,
@@ -16,7 +17,7 @@ import {
 import type { Icon } from "@phosphor-icons/react";
 import type { NavIcon, NavItem } from "./navigation";
 
-const ICONS: Record<NavIcon, Icon> = {
+export const NAV_ICONS: Record<NavIcon, Icon> = {
   overview: SquaresFourIcon,
   work: ClipboardTextIcon,
   myWork: WrenchIcon,
@@ -25,6 +26,7 @@ const ICONS: Record<NavIcon, Icon> = {
   assistant: ChatCircleTextIcon,
   users: UsersIcon,
   categories: TagIcon,
+  aiProviders: PlugsConnectedIcon,
   audit: ScrollIcon,
 };
 
@@ -37,7 +39,7 @@ function isActive(pathname: string, href: string): boolean {
 export function SidebarNavigation({ main, admin }: { main: NavItem[]; admin: NavItem[] }) {
   const pathname = usePathname();
   const renderItem = (item: NavItem) => {
-    const ItemIcon = ICONS[item.icon];
+    const ItemIcon = NAV_ICONS[item.icon];
     const active = isActive(pathname, item.href);
     return (
       <li key={item.href}>
@@ -78,7 +80,7 @@ export function MobileNavigation({ items }: { items: NavItem[] }) {
     >
       <ul className="grid grid-cols-4">
         {items.map((item) => {
-          const ItemIcon = ICONS[item.icon];
+          const ItemIcon = NAV_ICONS[item.icon];
           const active = isActive(pathname, item.href);
           return (
             <li key={item.href}>

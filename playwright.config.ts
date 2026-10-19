@@ -27,6 +27,6 @@ export default defineConfig({
     url: `http://localhost:${PORT}/login`,
     reuseExistingServer: false,
     timeout: 60_000,
-    env: { DATABASE_URL: url, DATABASE_SCHEMA: schema, AI_PROVIDER: "none" },
+    env: { DATABASE_URL: url, DATABASE_SCHEMA: schema, AI_PROVIDER: "none", APP_ORIGIN: `http://localhost:${PORT}` },
   },
 });

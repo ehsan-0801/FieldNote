@@ -43,7 +43,7 @@ async function OverviewContent() {
   const isManager = user.role === Role.ADMIN || user.role === Role.COORDINATOR;
   const [summary, activity, recentReports] = await Promise.all([
     getDashboardSummary(user, now),
-    listActivity(user, 1),
+    listActivity(user, 1, 8),
     user.role === Role.REPORTER ? listWorkOrders(user, workOrderListQuerySchema.parse({ pageSize: "10" })) : Promise.resolve(null),
   ]);
 
@@ -55,7 +55,7 @@ async function OverviewContent() {
         </p>
         <MetricStrip metrics={summary.metrics} />
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="min-w-0 space-y-6">
             {isManager ? (
               <section className="panel overflow-hidden" aria-labelledby="decisions-heading">
@@ -65,7 +65,7 @@ async function OverviewContent() {
                   </h2>
                   <Link
                     href="/app/work-orders?status=TRIAGE"
-                    className="inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink"
+                    className="-my-2 -mr-2 inline-flex min-h-10 items-center gap-1 px-2 text-xs text-ink-muted hover:text-ink"
                   >
                     All in triage <ArrowUpRightIcon size={12} aria-hidden />
                   </Link>
@@ -86,7 +86,10 @@ async function OverviewContent() {
                   <h2 id="queue-heading" className="panel-title">
                     My queue
                   </h2>
-                  <Link href="/app/my-work" className="inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink">
+                  <Link
+                    href="/app/my-work"
+                    className="-my-2 -mr-2 inline-flex min-h-10 items-center gap-1 px-2 text-xs text-ink-muted hover:text-ink"
+                  >
                     All my work <ArrowUpRightIcon size={12} aria-hidden />
                   </Link>
                 </div>
@@ -106,7 +109,10 @@ async function OverviewContent() {
                   <h2 id="reports-heading" className="panel-title">
                     Your reports
                   </h2>
-                  <Link href="/app/my-work" className="inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink">
+                  <Link
+                    href="/app/my-work"
+                    className="-my-2 -mr-2 inline-flex min-h-10 items-center gap-1 px-2 text-xs text-ink-muted hover:text-ink"
+                  >
                     All reports <ArrowUpRightIcon size={12} aria-hidden />
                   </Link>
                 </div>
@@ -131,18 +137,21 @@ async function OverviewContent() {
             <OpenByPriorityBar counts={summary.openByPriority} />
           </div>
 
-          <section className="panel self-start" aria-labelledby="movement-heading">
+          <section className="panel min-w-0 self-start" aria-labelledby="movement-heading">
             <div className="panel-head">
               <h2 id="movement-heading" className="panel-title">
                 Recent movement
               </h2>
-              <Link href="/app/activity" className="inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink">
+              <Link
+                href="/app/activity"
+                className="-my-2 -mr-2 inline-flex min-h-10 items-center gap-1 px-2 text-xs text-ink-muted hover:text-ink"
+              >
                 Full activity <ArrowUpRightIcon size={12} aria-hidden />
               </Link>
             </div>
             <div className="px-4 py-4">
               {activity.events.length ? (
-                <ActivityTimeline events={activity.events.slice(0, 8)} references={activity.references} now={now} />
+                <ActivityTimeline events={activity.events} references={activity.references} now={now} />
               ) : (
                 <EmptyState icon={ClockCounterClockwiseIcon} title="No activity yet." />
               )}

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { Priority } from "@/generated/prisma/enums";
 import { PRIORITY_LABEL, PRIORITY_ORDER } from "@/domain/priority";
 import { AT_RISK_AGE_DAYS } from "@/server/work-orders/queries";
@@ -10,15 +9,10 @@ interface Metrics {
   resolvedThisWeek: number;
 }
 
-// Only metrics that map exactly onto a list filter link to it.
-const METRICS: { key: keyof Metrics; label: string; hint: string; href?: string }[] = [
-  { key: "open", label: "Open work", hint: "Submitted through blocked", href: "/app/work-orders" },
-  {
-    key: "waitingForAssignment",
-    label: "Waiting for an owner",
-    hint: "Open with nobody assigned",
-    href: "/app/work-orders?owner=unassigned",
-  },
+// Plain figures: no list filter reproduces these exact counts, so they are not links.
+const METRICS: { key: keyof Metrics; label: string; hint: string }[] = [
+  { key: "open", label: "Open work", hint: "Submitted through blocked" },
+  { key: "waitingForAssignment", label: "Waiting for an owner", hint: "Open with nobody assigned" },
   { key: "atRisk", label: "At risk", hint: `Urgent, blocked, or high and older than ${AT_RISK_AGE_DAYS} days` },
   { key: "resolvedThisWeek", label: "Resolved this week", hint: "Since Monday 00:00 UTC" },
 ];
@@ -29,17 +23,9 @@ export function MetricStrip({ metrics }: { metrics: Metrics }) {
       {METRICS.map((metric, index) => (
         <div
           key={metric.key}
-          className={`relative px-4 py-4 ${index % 2 ? "border-l border-rule" : ""} ${index > 1 ? "border-t border-rule lg:border-t-0" : ""} ${index === 2 ? "lg:border-l" : ""}`}
+          className={`px-4 py-4 ${index % 2 ? "border-l border-rule" : ""} ${index > 1 ? "border-t border-rule lg:border-t-0" : ""} ${index === 2 ? "lg:border-l" : ""}`}
         >
-          <dt className="text-[13px] font-medium text-ink">
-            {metric.href ? (
-              <Link href={metric.href} className="after:absolute after:inset-0 hover:underline">
-                {metric.label}
-              </Link>
-            ) : (
-              metric.label
-            )}
-          </dt>
+          <dt className="text-[13px] font-medium text-ink">{metric.label}</dt>
           <dd className="mt-1 font-mono text-[28px] leading-none font-medium tabular-nums">{metrics[metric.key]}</dd>
           <dd className="mt-1.5 text-xs text-ink-muted">{metric.hint}</dd>
         </div>

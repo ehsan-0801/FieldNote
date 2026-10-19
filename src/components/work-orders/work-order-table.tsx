@@ -45,7 +45,7 @@ export function WorkOrderTable({ items, now = new Date() }: { items: WorkOrderLi
               <td className="max-w-[28rem] px-3 py-3 align-top">
                 <Link
                   href={`/app/work-orders/${item.id}`}
-                  className="font-medium text-ink after:absolute after:inset-0 group-hover:underline"
+                  className="font-medium text-ink wrap-anywhere after:absolute after:inset-0 group-hover:underline"
                 >
                   {item.title}
                 </Link>
@@ -85,7 +85,7 @@ export function WorkOrderTable({ items, now = new Date() }: { items: WorkOrderLi
               <span className="ref">{item.reference}</span>
               <StatusBadge status={item.status} />
             </div>
-            <Link href={`/app/work-orders/${item.id}`} className="mt-1.5 block font-medium after:absolute after:inset-0">
+            <Link href={`/app/work-orders/${item.id}`} className="mt-1.5 block font-medium wrap-anywhere after:absolute after:inset-0">
               {item.title}
             </Link>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">

@@ -11,6 +11,7 @@ const detailChange = z.object({ changes: z.record(z.string(), z.unknown()) });
 const noteAdded = z.object({ kind: z.enum(["COMMENT", "PROGRESS", "RESOLUTION"]) });
 const aiRun = z.object({ provider: z.string(), status: z.enum(["SUCCEEDED", "FALLBACK"]), errorCode: z.string().nullable() });
 const roleChange = z.object({ from: z.enum(Role), to: z.enum(Role) });
+const aiProvider = z.object({ label: z.string(), model: z.string().optional(), result: z.string().optional() });
 
 const FIELD_LABEL: Record<string, string> = {
   title: "title",
@@ -70,6 +71,17 @@ export function describeAuditDetails(action: string, details: unknown): string |
     case "user.role_changed": {
       const parsed = roleChange.safeParse(details);
       return parsed.success ? `${ROLE_NAME[parsed.data.from]} → ${ROLE_NAME[parsed.data.to]}` : null;
+    }
+    case "ai_provider.created":
+    case "ai_provider.updated":
+    case "ai_provider.deleted":
+    case "ai_provider.activated":
+    case "ai_provider.deactivated":
+    case "ai_provider.tested": {
+      const parsed = aiProvider.safeParse(details);
+      if (!parsed.success) return null;
+      const { label, model, result } = parsed.data;
+      return [`“${label}”`, model, result ? result.toLowerCase().replaceAll("_", " ") : undefined].filter(Boolean).join(" · ");
     }
     default:
       return null;

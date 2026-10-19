@@ -6,10 +6,11 @@ import { requirePageUser } from "@/server/auth/session";
 import { AccountMenu } from "./account-menu";
 import { MobileNavigation, SidebarNavigation } from "./nav-links";
 import { ROLE_LABEL, navigationFor } from "./navigation";
+import { RouteFocus } from "./route-focus";
 
 function Wordmark({ tone }: { tone: "dark" | "light" }) {
   return (
-    <Link href="/app" className="inline-flex" aria-label="FieldNote Atlas overview">
+    <Link href="/app" className="inline-flex min-h-11 items-center" aria-label="FieldNote Atlas overview">
       <BrandLogo tone={tone} height={tone === "dark" ? 34 : 28} priority />
     </Link>
   );
@@ -33,10 +34,17 @@ async function Sidebar() {
 
 async function TopBarAccount() {
   const user = await requirePageUser();
+  const nav = navigationFor(user.role);
   return (
     <>
-      <span className="hidden font-mono text-xs text-ink-muted md:inline">{user.workspaceName}</span>
-      <AccountMenu name={user.name} email={user.email} roleLabel={ROLE_LABEL[user.role]} />
+      <span className="hidden font-mono text-xs whitespace-nowrap text-ink-muted xl:inline">{user.workspaceName}</span>
+      <AccountMenu
+        key={user.id}
+        name={user.name}
+        email={user.email}
+        roleLabel={ROLE_LABEL[user.role]}
+        links={[...nav.main.filter((item) => !item.mobile), ...nav.admin]}
+      />
     </>
   );
 }
@@ -73,7 +81,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
       <div className="flex min-w-0 flex-col">
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-rule bg-paper/95 px-4 backdrop-blur-sm sm:px-7 lg:px-9">
-          <div className="lg:hidden">
+          <div className="shrink-0 lg:hidden">
             <Wordmark tone="light" />
           </div>
           <form action="/app/work-orders" role="search" className="relative ml-auto hidden w-full max-w-sm md:block lg:ml-0">
@@ -89,7 +97,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </form>
           <div className="ml-auto flex items-center gap-3">
             {/* The bottom bar has four slots, so the assistant is reached from here on small screens. */}
-            <Link href="/app/assistant" className="btn btn-ghost px-2 lg:hidden" aria-label="Assistant">
+            <Link href="/app/assistant" className="btn btn-ghost size-11 px-0 lg:hidden" aria-label="Assistant">
               <ChatCircleTextIcon size={20} aria-hidden />
             </Link>
             <Suspense fallback={<span className="h-10 w-32" aria-hidden />}>
@@ -97,7 +105,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Suspense>
           </div>
         </header>
-        <main id="main" className="mx-auto w-full max-w-[1440px] flex-1 px-4 pt-6 pb-24 sm:px-7 lg:px-9 lg:pt-8 lg:pb-12">
+        <main
+          id="main"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-[1440px] flex-1 px-4 pt-6 pb-24 outline-none sm:px-7 lg:px-9 lg:pt-8 lg:pb-12"
+        >
+          <Suspense fallback={null}>
+            <RouteFocus />
+          </Suspense>
           {children}
         </main>
       </div>

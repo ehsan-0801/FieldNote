@@ -5,6 +5,7 @@ import { z } from "zod";
 import { DomainError, ERROR_STATUS, type ErrorCode, type FieldErrors } from "@/domain/errors";
 import { requireRequestUser, type SessionUser } from "./auth/session";
 import { enforceRateLimit } from "./rate-limit";
+import { isProduction, serverEnv } from "./env";
 import { clientIp, hashIp, newRequestId, type ActorContext } from "./request-context";
 
 export const MAX_JSON_BYTES = 32 * 1024;
@@ -21,7 +22,8 @@ function errorResponse(code: ErrorCode, message: string, requestId: string, fiel
 }
 
 export function zodFieldErrors(error: z.ZodError): FieldErrors {
-  const fieldErrors: FieldErrors = {};
+  // Null prototype: keys such as "__proto__" in a crafted body must not reach Object.prototype.
+  const fieldErrors: FieldErrors = Object.create(null);
   for (const issue of error.issues) {
     const key = issue.path.length ? issue.path.join(".") : "_";
     // Unknown-key issues name the offending keys; surface them under each key.
@@ -48,8 +50,7 @@ export async function readJson<T extends z.ZodType>(request: NextRequest, schema
   }
   const declared = Number(request.headers.get("content-length") ?? "0");
   if (declared > MAX_JSON_BYTES) throw new DomainError("PAYLOAD_TOO_LARGE", "This request is too large.");
-  const text = await request.text();
-  if (Buffer.byteLength(text) > MAX_JSON_BYTES) throw new DomainError("PAYLOAD_TOO_LARGE", "This request is too large.");
+  const text = await readCapped(request);
   let body: unknown;
   try {
     body = JSON.parse(text);
@@ -59,22 +60,64 @@ export async function readJson<T extends z.ZodType>(request: NextRequest, schema
   return parseOrThrow(schema, body);
 }
 
+/** Reads the body as a stream and stops at the limit, so a lying or missing Content-Length can't exhaust memory. */
+async function readCapped(request: NextRequest): Promise<string> {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_JSON_BYTES) {
+      await reader.cancel();
+      throw new DomainError("PAYLOAD_TOO_LARGE", "This request is too large.");
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+const CROSS_SITE = "This request didn’t come from Fieldnote Atlas.";
+
+/** APP_ORIGIN, plus the deployment URLs Vercel provides so previews work without extra setup. */
+function allowedOrigins(): string[] {
+  const vercel = [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL]
+    .filter((host): host is string => Boolean(host))
+    .map((host) => `https://${host}`);
+  return [...serverEnv().APP_ORIGIN, ...vercel];
+}
+
 /**
  * Cookie sessions plus SameSite=Lax already block most cross-site writes; this
- * also rejects any state-changing request whose Origin isn't this site.
+ * also rejects any state-changing request whose Origin isn't this site. When
+ * APP_ORIGIN is configured it is the only accepted origin, so a spoofed Host or
+ * X-Forwarded-Host header can't make a foreign origin look local.
  */
 function assertSameOrigin(request: NextRequest): void {
   if (request.method === "GET" || request.method === "HEAD") return;
   const origin = request.headers.get("origin");
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  if (!origin || !host) throw new DomainError("FORBIDDEN", "This request didn’t come from Fieldnote Atlas.");
-  let originHost: string;
+  if (!origin) throw new DomainError("FORBIDDEN", CROSS_SITE);
+  let originUrl: URL;
   try {
-    originHost = new URL(origin).host;
+    originUrl = new URL(origin);
   } catch {
-    throw new DomainError("FORBIDDEN", "This request didn’t come from Fieldnote Atlas.");
+    throw new DomainError("FORBIDDEN", CROSS_SITE);
   }
-  if (originHost !== host) throw new DomainError("FORBIDDEN", "This request didn’t come from Fieldnote Atlas.");
+  const allowed = allowedOrigins();
+  if (allowed.length > 0) {
+    if (!allowed.includes(originUrl.origin)) throw new DomainError("FORBIDDEN", CROSS_SITE);
+    return;
+  }
+  // Production must know its own origin; trusting the Host header there would let a spoofed
+  // Host make a foreign Origin look local. Fail closed and say why in the server log.
+  if (isProduction()) {
+    console.error("APP_ORIGIN is not set; refusing state-changing requests.");
+    throw new DomainError("FORBIDDEN", CROSS_SITE);
+  }
+  const host = request.headers.get("host");
+  if (!host || originUrl.host !== host) throw new DomainError("FORBIDDEN", CROSS_SITE);
 }
 
 export interface RequestMeta {
@@ -117,8 +160,17 @@ function handleError(error: unknown, requestId: string): Response {
   if (error instanceof DomainError) {
     return errorResponse(error.code, error.message, requestId, error.fieldErrors);
   }
-  // Log the failure class and request ID only; messages can contain report text or SQL.
+  // Log the failure class, any driver error code and where it was thrown — never the message,
+  // which can contain report text or SQL.
   const kind = error instanceof Error ? error.name : typeof error;
-  console.error(`[${requestId}] unhandled ${kind}`);
+  const code = error instanceof Error && "code" in error && typeof error.code === "string" ? ` code=${error.code}` : "";
+  const origin =
+    error instanceof Error
+      ? (error.stack
+          ?.split("\n")
+          .find((line) => line.includes("/src/"))
+          ?.trim() ?? "")
+      : "";
+  console.error(`[${requestId}] unhandled ${kind}${code} ${origin}`.trimEnd());
   return errorResponse("INTERNAL_ERROR", "Something went wrong on our side. Try again in a moment.", requestId);
 }

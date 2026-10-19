@@ -1,33 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { SparkleIcon } from "@phosphor-icons/react/ssr";
-import { NO_FACTORS } from "@/domain/priority";
 import { REPORT_MAX_LENGTH } from "@/domain/schemas";
 import { callApi, type ApiFailure } from "@/lib/api-client";
 import { InlineNotice } from "../ui/states";
-import { SuggestionReviewPanel } from "./suggestion-review-panel";
 
 const createdSchema = z.object({ id: z.string(), reference: z.string() });
 
-interface Saved {
-  id: string;
-  reference: string;
-  report: string;
-  locationLabel: string;
-  assetLabel: string;
-  autoDraft: boolean;
-}
-
-/** Stage one saves the plain-language report; stage two reviews structure on the same page. */
-export function ReportComposer({ categories }: { categories: { id: string; name: string; slug: string }[] }) {
+/**
+ * Stage one saves the plain-language report, then moves to the report's own page for review.
+ * Reviewing at the report's URL means a reload or a later visit resumes it instead of losing it.
+ */
+export function ReportComposer() {
+  const router = useRouter();
   const [report, setReport] = useState("");
   const [locationLabel, setLocationLabel] = useState("");
   const [assetLabel, setAssetLabel] = useState("");
   const [pending, setPending] = useState<"draft" | "manual" | null>(null);
   const [error, setError] = useState<ApiFailure | null>(null);
-  const [saved, setSaved] = useState<Saved | null>(null);
 
   async function submit(autoDraft: boolean) {
     setPending(autoDraft ? "draft" : "manual");
@@ -37,31 +30,26 @@ export function ReportComposer({ categories }: { categories: { id: string; name:
       body: { originalReport: report, locationLabel: locationLabel || null, assetLabel: assetLabel || null },
       schema: createdSchema,
     });
-    setPending(null);
-    if (!result.ok) return setError(result.error);
-    setSaved({ ...result.data, report: report.trim(), locationLabel, assetLabel, autoDraft });
+    if (!result.ok) {
+      setPending(null);
+      return setError(result.error);
+    }
+    // Pending stays set while navigating, so the buttons can't file the same report twice.
+    router.replace(`/app/work-orders/${result.data.id}?review=${autoDraft ? "draft" : "manual"}`);
   }
 
-  if (saved) {
-    return (
-      <SuggestionReviewPanel
-        workOrderId={saved.id}
-        reference={saved.reference}
-        originalReport={saved.report}
-        initial={{
-          title: saved.report.split(/(?<=[.!?])\s/)[0]?.slice(0, 100) ?? "",
-          summary: "",
-          categoryId: "",
-          locationLabel: saved.locationLabel,
-          assetLabel: saved.assetLabel,
-          factors: NO_FACTORS,
-        }}
-        categories={categories}
-        existingExtraction={null}
-        autoDraft={saved.autoDraft}
-      />
-    );
-  }
+  // The page stays mounted (hidden) after navigation; React runs this cleanup when it hides
+  // the page, so the next visit starts with a blank, enabled form.
+  useEffect(
+    () => () => {
+      setReport("");
+      setLocationLabel("");
+      setAssetLabel("");
+      setPending(null);
+      setError(null);
+    },
+    [],
+  );
 
   const reportError = error?.fieldErrors?.originalReport?.[0];
   return (
@@ -91,7 +79,8 @@ export function ReportComposer({ categories }: { categories: { id: string; name:
         />
         <div className="flex justify-between gap-3">
           <p id="report-hint" className="field-hint">
-            Your words are saved exactly as written. Contact details are removed before any AI provider sees the text.
+            At least 12 characters. Your words are saved exactly as written; contact details are removed before any AI provider sees the
+            text.
           </p>
           <p className="field-hint font-mono tabular-nums">
             {report.length}/{REPORT_MAX_LENGTH}

@@ -12,7 +12,8 @@ import type { ActorContext } from "../request-context";
 import { loadVisibleWorkOrder } from "../work-orders/scope";
 import { parseStoredExtraction } from "../work-orders/queries";
 import { redactContactDetails } from "./redact";
-import { runExtraction, selectProvider } from "./run-extraction";
+import { resolveExtractionSelection } from "./provider-config";
+import { runExtraction } from "./run-extraction";
 
 /**
  * Drafts structure for a saved report. The report is read from the database, not
@@ -46,7 +47,7 @@ export async function draftWorkOrderFromReport(ctx: ActorContext, workOrderId: s
       assetLabel: workOrder.assetLabel ? redactContactDetails(workOrder.assetLabel) : null,
       categories,
     },
-    selectProvider(env),
+    await resolveExtractionSelection(ctx.actor.workspaceId),
     { timeoutMs: env.AI_TIMEOUT_MS },
   );
 

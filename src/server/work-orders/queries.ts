@@ -29,6 +29,11 @@ const listSelect = {
   category: { select: { name: true } },
 } satisfies Prisma.WorkOrderSelect;
 
+// Upper bounds for lists that are not paginated; workspaces this size are far beyond the target users.
+export const MAX_OPTIONS = 200;
+const MAX_NOTES = 200;
+const TIMELINE_LIMIT = 200;
+
 export type WorkOrderListItem = Prisma.WorkOrderGetPayload<{ select: typeof listSelect }>;
 
 function listOrder(query: WorkOrderListQuery): Prisma.WorkOrderOrderByWithRelationInput[] {
@@ -54,7 +59,8 @@ export async function listWorkOrders(actor: Actor, query: WorkOrderListQuery) {
   else if (query.owner === "unassigned") filters.push({ assigneeId: null });
   else if (query.owner) filters.push({ assigneeId: query.owner });
   if (query.q) {
-    const contains = { contains: query.q, mode: "insensitive" as const };
+    // LIKE treats % and _ as wildcards; escape them so the search matches what was typed.
+    const contains = { contains: query.q.replace(/[\\%_]/g, (char) => `\\${char}`), mode: "insensitive" as const };
     filters.push({ OR: [{ title: contains }, { reference: contains }, { locationLabel: contains }, { originalReport: contains }] });
   }
 
@@ -72,16 +78,32 @@ export async function listWorkOrders(actor: Actor, query: WorkOrderListQuery) {
   return { items, total, page: query.page, pageSize: query.pageSize, pageCount: Math.max(1, Math.ceil(total / query.pageSize)) };
 }
 
+/** Categories offered when filing or editing a report. */
+export function listActiveCategories(actor: Actor) {
+  return db.category.findMany({
+    where: { workspaceId: actor.workspaceId, isActive: true },
+    select: { id: true, name: true, slug: true },
+    orderBy: { name: "asc" },
+    take: MAX_OPTIONS,
+  });
+}
+
 /** Options for list filters. Owner choices are only offered to people who can see everyone's work. */
 export async function listFilterOptions(actor: Actor) {
   const managesWork = actor.role === Role.ADMIN || actor.role === Role.COORDINATOR;
   const [categories, owners] = await Promise.all([
-    db.category.findMany({ where: { workspaceId: actor.workspaceId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.category.findMany({
+      where: { workspaceId: actor.workspaceId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+      take: MAX_OPTIONS,
+    }),
     managesWork
       ? db.user.findMany({
           where: { workspaceId: actor.workspaceId, role: Role.TECHNICIAN },
           select: { id: true, name: true },
           orderBy: { name: "asc" },
+          take: MAX_OPTIONS,
         })
       : Promise.resolve(null),
   ]);
@@ -104,15 +126,18 @@ export async function getWorkOrderDetail(actor: Actor, id: string) {
         assignee: { select: { id: true, name: true } },
         category: { select: { id: true, name: true, slug: true } },
         notes: {
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          // Newest notes win on very long records; put back in reading order below.
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          take: MAX_NOTES,
           select: { id: true, kind: true, body: true, createdAt: true, author: { select: { name: true, role: true } } },
         },
       },
     }),
     db.auditEvent.findMany({
       where: { workspaceId: actor.workspaceId, entityType: "WorkOrder", entityId: id },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      take: 200,
+      // Newest first so busy records keep their latest history; reversed below for display.
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: TIMELINE_LIMIT,
       select: { id: true, action: true, details: true, createdAt: true, actor: { select: { name: true } } },
     }),
     db.aiExtraction.findFirst({ where: { workOrderId: id }, orderBy: { createdAt: "desc" } }),
@@ -126,25 +151,22 @@ export async function getWorkOrderDetail(actor: Actor, id: string) {
               where: { workspaceId: actor.workspaceId, role: Role.TECHNICIAN, isActive: true },
               select: { id: true, name: true },
               orderBy: { name: "asc" },
+              take: MAX_OPTIONS,
             })
           : Promise.resolve([]),
-        db.category.findMany({
-          where: { workspaceId: actor.workspaceId, isActive: true },
-          select: { id: true, name: true, slug: true },
-          orderBy: { name: "asc" },
-        }),
+        listActiveCategories(actor),
       ])
     : [[], []];
 
   return {
-    workOrder,
+    workOrder: { ...workOrder, notes: workOrder.notes.reverse() },
     relation,
     permissions,
     transitions: transitionsFrom(facts.status, relation === "reporter" ? Role.REPORTER : actor.role)
       .filter((rule) => relation !== "reporter" || rule.to === WorkOrderStatus.TRIAGE)
       .map((rule) => ({ to: rule.to, label: rule.label, requires: rule.requires })),
     noteKinds: allowedNoteKinds(actor, facts),
-    timeline,
+    timeline: timeline.reverse(),
     extraction: latestExtraction ? parseStoredExtraction(latestExtraction) : null,
     technicians,
     categories,

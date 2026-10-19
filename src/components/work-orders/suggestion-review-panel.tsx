@@ -2,33 +2,15 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { z } from "zod";
-import { ArrowRightIcon, CircleNotchIcon, QuotesIcon, SparkleIcon } from "@phosphor-icons/react/ssr";
-import { Priority } from "@/generated/prisma/enums";
-import { AI_ERROR_CODES, AI_ERROR_MESSAGE } from "@/domain/extraction";
-import { PRIORITY_FACTORS, PRIORITY_SIGNALS, assessPriority, factorsFromSignals, type PriorityFactorValues } from "@/domain/priority";
+import { ArrowRightIcon, SparkleIcon } from "@phosphor-icons/react/ssr";
+import { draftTitle } from "@/domain/drafting";
+import { extractionResponseSchema } from "@/domain/extraction";
+import { PRIORITY_FACTORS, assessPriority, factorsFromSignals, type PriorityFactorValues } from "@/domain/priority";
 import { anyData, callApi, type ApiFailure } from "@/lib/api-client";
 import { PriorityLabel } from "../ui/priority-label";
 import { InlineNotice } from "../ui/states";
-import { extractionSourceLabel, type StoredExtraction } from "./suggestion-summary";
-
-const draftResponseSchema = z.object({
-  provider: z.string(),
-  model: z.string(),
-  status: z.enum(["SUCCEEDED", "FALLBACK"]),
-  errorCode: z.enum(AI_ERROR_CODES).nullable(),
-  createdAt: z.string(),
-  suggestion: z.object({
-    suggestedTitle: z.string(),
-    summary: z.string(),
-    categorySlug: z.string().nullable(),
-    suggestedPriority: z.enum(Priority),
-    signals: z.array(z.object({ factor: z.enum(PRIORITY_SIGNALS), evidence: z.string() })),
-    missingDetails: z.array(z.string()),
-    suggestedNextStep: z.string(),
-    confidence: z.number().nullable(),
-  }),
-});
+import { DraftStatus, type DraftState } from "./draft-status";
+import { SuggestionSummary, type StoredExtraction } from "./suggestion-summary";
 
 export interface ReviewValues {
   title: string;
@@ -38,9 +20,6 @@ export interface ReviewValues {
   assetLabel: string;
   factors: PriorityFactorValues;
 }
-
-type DraftState =
-  { kind: "idle" } | { kind: "loading" } | { kind: "ready"; extraction: StoredExtraction } | { kind: "failed"; error: ApiFailure };
 
 type TextField = "title" | "summary" | "categoryId";
 
@@ -57,6 +36,36 @@ function SuggestedTag({ active }: { active: boolean }) {
 }
 const CLIENT_TIMEOUT_MS = 20_000;
 
+function suggestedValues(current: ReviewValues, extraction: StoredExtraction, categories: { id: string; slug: string }[]) {
+  const { suggestion } = extraction;
+  const category = categories.find((option) => option.slug === suggestion.categorySlug);
+  const values: ReviewValues = {
+    ...current,
+    title: suggestion.suggestedTitle || current.title,
+    summary: suggestion.summary || current.summary,
+    categoryId: category?.id ?? current.categoryId,
+    factors: factorsFromSignals(suggestion.signals.map((signal) => signal.factor)),
+  };
+  const suggested = new Set<TextField | "factors">(["title", "summary", "factors"]);
+  if (category) suggested.add("categoryId");
+  return { values, suggested };
+}
+
+function resumeFromStoredDraft(
+  initial: ReviewValues,
+  originalReport: string,
+  extraction: StoredExtraction | null,
+  categories: { id: string; slug: string }[],
+) {
+  const untouched =
+    initial.title === draftTitle(originalReport) &&
+    !initial.summary &&
+    !initial.categoryId &&
+    PRIORITY_FACTORS.every((factor) => !initial.factors[factor.field]);
+  if (!extraction || !untouched) return { values: initial, suggested: new Set<TextField | "factors">() };
+  return suggestedValues(initial, extraction, categories);
+}
+
 /**
  * Review step for a saved report. AI output fills the form as labelled suggestions
  * the person can change; nothing becomes canonical until they save it.
@@ -69,6 +78,7 @@ export function SuggestionReviewPanel({
   categories,
   existingExtraction,
   autoDraft,
+  focusOnMount = false,
 }: {
   workOrderId: string;
   reference: string;
@@ -77,29 +87,24 @@ export function SuggestionReviewPanel({
   categories: { id: string; name: string; slug: string }[];
   existingExtraction: StoredExtraction | null;
   autoDraft: boolean;
+  focusOnMount?: boolean;
 }) {
   const router = useRouter();
-  const [values, setValues] = useState<ReviewValues>(initial);
-  const [suggested, setSuggested] = useState<Set<TextField | "factors">>(new Set());
+  // Resuming a draft that was never reviewed starts from its stored suggestion, not from blank fields.
+  const [resumed] = useState(() => resumeFromStoredDraft(initial, originalReport, existingExtraction, categories));
+  const [values, setValues] = useState<ReviewValues>(resumed.values);
+  const [suggested, setSuggested] = useState<Set<TextField | "factors">>(resumed.suggested);
   const [draft, setDraft] = useState<DraftState>(existingExtraction ? { kind: "ready", extraction: existingExtraction } : { kind: "idle" });
   const [saving, setSaving] = useState<"triage" | "later" | null>(null);
   const [saveError, setSaveError] = useState<ApiFailure | null>(null);
   const controller = useRef<AbortController | null>(null);
   const started = useRef(false);
+  const heading = useRef<HTMLHeadingElement>(null);
 
   function applySuggestion(extraction: StoredExtraction) {
-    const { suggestion } = extraction;
-    const category = categories.find((option) => option.slug === suggestion.categorySlug);
-    setValues((current) => ({
-      ...current,
-      title: suggestion.suggestedTitle || current.title,
-      summary: suggestion.summary || current.summary,
-      categoryId: category?.id ?? current.categoryId,
-      factors: factorsFromSignals(suggestion.signals.map((signal) => signal.factor)),
-    }));
-    const marked = new Set<TextField | "factors">(["title", "summary", "factors"]);
-    if (category) marked.add("categoryId");
-    setSuggested(marked);
+    const next = suggestedValues(values, extraction, categories);
+    setValues(next.values);
+    setSuggested(next.suggested);
   }
 
   async function requestDraft() {
@@ -111,10 +116,12 @@ export function SuggestionReviewPanel({
     const result = await callApi("/api/ai/parse-report", {
       method: "POST",
       body: { workOrderId },
-      schema: draftResponseSchema,
+      schema: extractionResponseSchema,
       signal: abort.signal,
     });
     clearTimeout(timer);
+    // A newer request (or a remount) replaced this one; its result no longer applies.
+    if (controller.current !== abort) return;
     if (abort.signal.aborted && !result.ok) {
       setDraft({
         kind: "failed",
@@ -135,14 +142,25 @@ export function SuggestionReviewPanel({
   });
 
   useEffect(() => {
-    // The draft request is a one-off for this saved report, guarded against double mounting.
+    // One draft per saved report. If the component unmounts mid-request (including React's
+    // development double-mount), the request is cancelled and allowed to start again.
     if (autoDraft && !existingExtraction && !started.current) {
       started.current = true;
       startAutoDraft();
     }
+    return () => {
+      if (controller.current && !controller.current.signal.aborted) {
+        controller.current.abort();
+        controller.current = null;
+        started.current = false;
+      }
+    };
   }, [autoDraft, existingExtraction]);
 
-  useEffect(() => () => controller.current?.abort(), []);
+  // Moving focus to the form's heading tells keyboard and screen-reader users the step changed.
+  useEffect(() => {
+    if (focusOnMount) heading.current?.focus();
+  }, [focusOnMount]);
 
   const update =
     (field: TextField | "locationLabel" | "assetLabel") =>
@@ -183,7 +201,10 @@ export function SuggestionReviewPanel({
         categoryId: values.categoryId || null,
         locationLabel: values.locationLabel.trim() || null,
         assetLabel: values.assetLabel.trim() || null,
-        factors: values.factors,
+        // Unchanged factors aren't resent, so saving doesn't re-confirm or re-audit priority.
+        ...(PRIORITY_FACTORS.some((factor) => values.factors[factor.field] !== initial.factors[factor.field])
+          ? { factors: values.factors }
+          : {}),
       },
       schema: anyData,
     });
@@ -209,51 +230,17 @@ export function SuggestionReviewPanel({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-      <div className="space-y-5">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="min-w-0 space-y-5">
+        <h2 ref={heading} tabIndex={-1} className="text-[15px] font-semibold focus:outline-none">
+          Review the details
+        </h2>
         <figure className="rounded-panel border border-rule bg-paper px-4 py-3">
           <figcaption className="label-mono mb-1.5">Original report · saved as {reference}</figcaption>
-          <blockquote className="text-sm leading-relaxed whitespace-pre-line">{originalReport}</blockquote>
+          <blockquote className="text-sm leading-relaxed wrap-anywhere whitespace-pre-line">{originalReport}</blockquote>
         </figure>
 
-        <div aria-live="polite" className="space-y-2">
-          {draft.kind === "idle" ? (
-            <div className="flex flex-col items-start gap-3 rounded-panel border border-dashed border-rule-strong px-4 py-3 sm:flex-row sm:items-center">
-              <p className="flex-1 text-sm text-ink-muted">
-                Let Fieldnote propose a title, category and priority factors from the note, or fill them in yourself.
-              </p>
-              <button type="button" className="btn btn-signal" onClick={requestDraft}>
-                <SparkleIcon size={16} aria-hidden />
-                Draft structure from note
-              </button>
-            </div>
-          ) : null}
-          {draft.kind === "loading" ? (
-            <div role="status" className="flex flex-wrap items-center gap-3 rounded-panel border border-rule bg-chalk px-4 py-3 text-sm">
-              <CircleNotchIcon size={18} className="animate-spin text-signal motion-reduce:animate-none" aria-hidden />
-              <span className="flex-1">Reading the report…</span>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => controller.current?.abort()}>
-                Stop and continue manually
-              </button>
-            </div>
-          ) : null}
-          {draft.kind === "failed" ? (
-            <InlineNotice tone="warning" title="This report is saved. AI suggestions are unavailable right now.">
-              {draft.error.code === "RATE_LIMITED" ? "Too many drafts were requested recently. " : null}
-              Continue manually below; nothing is lost.
-            </InlineNotice>
-          ) : null}
-          {extraction?.status === "FALLBACK" ? (
-            <InlineNotice tone="info" title="Rule-based draft">
-              {extraction.errorCode ? AI_ERROR_MESSAGE[extraction.errorCode] : "A rule-based draft was made."} Check every field.
-            </InlineNotice>
-          ) : null}
-          {lowConfidence ? (
-            <InlineNotice tone="warning" title="Check these details">
-              The suggestion came back with low confidence. Review each field before sending.
-            </InlineNotice>
-          ) : null}
-        </div>
+        <DraftStatus draft={draft} lowConfidence={lowConfidence} onDraft={requestDraft} onStop={() => controller.current?.abort()} />
 
         <form
           className="grid gap-4 sm:grid-cols-2"
@@ -379,37 +366,7 @@ export function SuggestionReviewPanel({
         <div className="panel p-4">
           <h2 className="panel-title mb-2">Why this was suggested</h2>
           {extraction ? (
-            <div className="space-y-3 text-sm">
-              <p className="label-mono">{extractionSourceLabel(extraction)}</p>
-              {extraction.suggestion.signals.length ? (
-                <ul className="space-y-2">
-                  {extraction.suggestion.signals.map((signal) => (
-                    <li key={signal.factor} className="flex items-start gap-2">
-                      <QuotesIcon size={14} className="mt-0.5 shrink-0 text-ink-muted" aria-hidden />
-                      <span>
-                        <span className="font-medium">{PRIORITY_FACTORS.find((item) => item.signal === signal.factor)?.label}</span>
-                        <span className="block text-ink-muted">“{signal.evidence}”</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-ink-muted">No impact signals were found in the text.</p>
-              )}
-              {extraction.suggestion.missingDetails.length ? (
-                <div>
-                  <p className="font-medium">Worth adding</p>
-                  <ul className="mt-1 list-disc space-y-0.5 pl-5 text-ink-muted">
-                    {extraction.suggestion.missingDetails.map((question) => (
-                      <li key={question}>{question}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              <p className="text-ink-muted">
-                <span className="font-medium text-ink">Next step:</span> {extraction.suggestion.suggestedNextStep}
-              </p>
-            </div>
+            <SuggestionSummary extraction={extraction} />
           ) : (
             <p className="text-sm text-ink-muted">Suggestions and the phrases they came from will appear here.</p>
           )}

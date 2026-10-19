@@ -18,6 +18,8 @@
   --color-ink-muted: #5d6864;
   --color-rule: #daddd4;
   --color-rule-strong: #c3c8bd;
+  /* Field borders need 3:1 against paper and chalk (WCAG 1.4.11). */
+  --color-rule-input: #858c86;
 
   --color-signal: #3e6b58;
   --color-signal-hover: #335a4a;
@@ -60,6 +62,14 @@
 @layer base {
   html {
     color-scheme: light;
+    /* Keep keyboard-focused elements clear of the sticky header and the phone bottom bar. */
+    scroll-padding-top: 5rem;
+    scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 64rem) {
+    html {
+      scroll-padding-bottom: 1rem;
+    }
   }
   body {
     background: var(--color-paper);
@@ -72,6 +82,9 @@
     outline: 2px solid var(--color-signal);
     outline-offset: 2px;
     border-radius: 4px;
+  }
+  aside :focus-visible {
+    outline-color: var(--color-sidebar-ink);
   }
   ::selection {
     background: var(--color-signal-soft);
@@ -92,6 +105,18 @@
   }
   .btn-sm {
     @apply h-8 px-2.5 text-[13px];
+  }
+  /* Touch screens get larger targets; desktop keeps the compact console density. */
+  @media (pointer: coarse) {
+    .btn {
+      min-height: 2.75rem;
+    }
+    .btn-sm {
+      min-height: 2.5rem;
+    }
+    .input {
+      min-height: 2.75rem;
+    }
   }
   .btn-primary {
     @apply border-ink bg-ink text-chalk hover:bg-ink-hover;
@@ -129,7 +154,7 @@
     @apply mt-1 text-xs font-medium text-oxide;
   }
   .input {
-    @apply block h-9 w-full rounded-control border border-rule-strong bg-chalk px-3 text-sm text-ink transition-colors duration-150 placeholder:text-ink-muted/70 focus:border-signal focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-0 aria-invalid:border-oxide;
+    @apply block h-9 w-full rounded-control border border-rule-input bg-chalk px-3 text-sm text-ink transition-colors duration-150 placeholder:text-ink-muted focus:border-signal aria-invalid:border-oxide;
   }
   textarea.input {
     @apply h-auto py-2 leading-relaxed;

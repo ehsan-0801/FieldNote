@@ -5,7 +5,7 @@ import Link from "next/link";
 import { FunnelIcon, MagnifyingGlassIcon } from "@phosphor-icons/react/ssr";
 import { Priority, WorkOrderStatus } from "@/generated/prisma/enums";
 import { PRIORITY_LABEL, PRIORITY_ORDER } from "@/domain/priority";
-import type { WorkOrderListQuery } from "@/domain/schemas";
+import { PAGE_SIZES, type WorkOrderListQuery } from "@/domain/schemas";
 import { STATUS_LABEL } from "@/domain/workflow";
 import { Dialog } from "../ui/dialog";
 
@@ -96,29 +96,52 @@ export function FilterBar({ action, query, categories, owners, activeCount }: Fi
           <option value="created">Date reported</option>
         </select>
       </div>
+      <div>
+        <label htmlFor={`${idPrefix}-dir`} className="field-label">
+          Order
+        </label>
+        <select id={`${idPrefix}-dir`} name="dir" defaultValue={query.dir} className="input">
+          <option value="desc">{query.sort === "priority" ? "Most urgent first" : "Newest first"}</option>
+          <option value="asc">{query.sort === "priority" ? "Least urgent first" : "Oldest first"}</option>
+        </select>
+      </div>
+      <div>
+        <label htmlFor={`${idPrefix}-size`} className="field-label">
+          Per page
+        </label>
+        <select id={`${idPrefix}-size`} name="pageSize" defaultValue={String(query.pageSize)} className="input">
+          {PAGE_SIZES.map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+        </select>
+      </div>
     </>
   );
 
   return (
     <form action={action} className="mb-4">
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <label htmlFor="filter-q" className="sr-only">
+      <div className="flex items-end gap-2">
+        <div className="min-w-0 flex-1">
+          <label htmlFor="filter-q" className="field-label">
             Search
           </label>
-          <MagnifyingGlassIcon
-            size={16}
-            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-muted"
-            aria-hidden
-          />
-          <input
-            id="filter-q"
-            name="q"
-            type="search"
-            defaultValue={query.q ?? ""}
-            placeholder="Search reference, title, place or report text"
-            className="input pl-9"
-          />
+          <div className="relative">
+            <MagnifyingGlassIcon
+              size={16}
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-muted"
+              aria-hidden
+            />
+            <input
+              id="filter-q"
+              name="q"
+              type="search"
+              defaultValue={query.q ?? ""}
+              placeholder="Reference, title, place or report text"
+              className="input pl-9"
+            />
+          </div>
         </div>
         <button type="button" className="btn btn-secondary md:hidden" onClick={() => setSheetOpen(true)} aria-haspopup="dialog">
           <FunnelIcon size={16} aria-hidden />
@@ -130,7 +153,7 @@ export function FilterBar({ action, query, categories, owners, activeCount }: Fi
       </div>
 
       {/* Only one copy of the fields is enabled at a time, so each value is submitted once. */}
-      <fieldset disabled={sheetOpen} className="mt-3 hidden grid-cols-5 items-end gap-3 md:grid">
+      <fieldset disabled={sheetOpen} className="mt-3 hidden grid-cols-4 items-end gap-3 md:grid xl:grid-cols-7">
         <legend className="sr-only">Filters</legend>
         {fields("desktop")}
       </fieldset>

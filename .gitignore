@@ -23,7 +23,10 @@ next-env.d.ts
 .env.*
 !.env.example
 
-# project briefs and agent tooling stay local
+# project briefs, agent tooling and test suites stay local
+/tests/
+/test-results/
+/playwright-report/
 /docs/
 /Prompts/
 /.claude/

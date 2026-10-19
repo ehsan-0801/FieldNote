@@ -2,6 +2,7 @@ import { updateWorkOrderSchema } from "@/domain/schemas";
 import { authedRoute, ok, readJson } from "@/server/http";
 import { updateWorkOrder } from "@/server/work-orders/commands";
 import { getWorkOrderDetail } from "@/server/work-orders/queries";
+import { methodNotAllowed } from "@/server/method-not-allowed";
 
 type Params = { id: string };
 
@@ -14,3 +15,7 @@ export const PATCH = authedRoute<Params>(async (request, ctx, { id }) => {
   const input = await readJson(request, updateWorkOrderSchema);
   return ok(await updateWorkOrder(ctx, id, input));
 });
+
+export const POST = methodNotAllowed("GET", "PATCH");
+export const PUT = methodNotAllowed("GET", "PATCH");
+export const DELETE = methodNotAllowed("GET", "PATCH");
