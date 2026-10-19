@@ -81,8 +81,22 @@ const geminiResponse = z.object({
   candidates: z.array(z.object({ content: z.object({ parts: z.array(z.object({ text: z.string().optional() })) }) })).min(1),
 });
 
-type GeminiMode = "schema" | "json" | "plain";
-const GEMINI_MODES: readonly GeminiMode[] = ["schema", "json", "plain"];
+interface GeminiMode {
+  output: "schema" | "json" | "plain";
+  /**
+   * Thinking models reason before answering by default, which can take longer than our
+   * timeouts on these short JSON tasks. Gemini 3 takes a level, 2.5 a token budget; older
+   * models reject both, so each is tried and dropped in turn.
+   */
+  thinking?: { thinkingLevel: "low" } | { thinkingBudget: 0 };
+}
+const GEMINI_MODES: readonly GeminiMode[] = [
+  { output: "schema", thinking: { thinkingLevel: "low" } },
+  { output: "schema", thinking: { thinkingBudget: 0 } },
+  { output: "schema" },
+  { output: "json" },
+  { output: "plain" },
+];
 
 export const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -92,7 +106,7 @@ export function createGeminiCompleter(apiKey: string, model: string, fetcher: Fe
     model,
     complete(request: JsonRequest) {
       return withOutputModes(`gemini|${model}`, GEMINI_MODES, async (mode) => {
-        const system = mode === "schema" ? request.system : withSchemaInstruction(request.system, request.jsonSchema);
+        const system = mode.output === "schema" ? request.system : withSchemaInstruction(request.system, request.jsonSchema);
         const json = await postJson(
           fetcher,
           `${GEMINI_BASE_URL}/models/${encodeURIComponent(model)}:generateContent`,
@@ -102,8 +116,9 @@ export function createGeminiCompleter(apiKey: string, model: string, fetcher: Fe
             contents: request.turns.map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] })),
             generationConfig: {
               temperature: request.temperature,
-              ...(mode === "plain" ? {} : { responseMimeType: "application/json" }),
-              ...(mode === "schema" ? { responseSchema: request.geminiSchema } : {}),
+              ...(mode.output === "plain" ? {} : { responseMimeType: "application/json" }),
+              ...(mode.output === "schema" ? { responseSchema: request.geminiSchema } : {}),
+              ...(mode.thinking ? { thinkingConfig: mode.thinking } : {}),
             },
           },
           request.signal,

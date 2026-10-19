@@ -34,7 +34,7 @@ export const AI_SERVICES = [
     name: "Google Gemini",
     kind: "gemini",
     baseUrl: null,
-    keyPrefixes: ["AIza"],
+    keyPrefixes: ["AIza", "AQ."],
     preferredModels: ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"],
   },
   {
