@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
-import { ChatCircleTextIcon, MagnifyingGlassIcon, NotebookIcon } from "@phosphor-icons/react/ssr";
+import { ChatCircleTextIcon, MagnifyingGlassIcon } from "@phosphor-icons/react/ssr";
+import { BrandLogo } from "../ui/brand-logo";
 import { requirePageUser } from "@/server/auth/session";
 import { AccountMenu } from "./account-menu";
 import { MobileNavigation, SidebarNavigation } from "./nav-links";
@@ -8,11 +9,8 @@ import { ROLE_LABEL, navigationFor } from "./navigation";
 
 function Wordmark({ tone }: { tone: "dark" | "light" }) {
   return (
-    <Link href="/app" className={`flex items-center gap-2 ${tone === "dark" ? "text-sidebar-ink" : "text-ink"}`}>
-      <span className={`grid size-7 place-items-center rounded-[7px] ${tone === "dark" ? "bg-signal text-chalk" : "bg-ink text-chalk"}`}>
-        <NotebookIcon size={16} weight="bold" aria-hidden />
-      </span>
-      <span className="text-[15px] font-semibold tracking-[-0.01em]">Fieldnote Atlas</span>
+    <Link href="/app" className="inline-flex" aria-label="FieldNote Atlas overview">
+      <BrandLogo tone={tone} height={tone === "dark" ? 34 : 28} priority />
     </Link>
   );
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRightIcon, NotebookIcon, QuotesIcon, ShieldWarningIcon } from "@phosphor-icons/react/ssr";
+import { ArrowRightIcon, QuotesIcon, ShieldWarningIcon } from "@phosphor-icons/react/ssr";
+import { BrandLogo } from "@/components/ui/brand-logo";
 import { PriorityLabel } from "@/components/ui/priority-label";
 import { StatusBadge } from "@/components/ui/status-badge";
 
@@ -26,12 +27,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-dvh">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-8">
-        <span className="flex items-center gap-2">
-          <span className="grid size-8 place-items-center rounded-[8px] bg-ink text-chalk">
-            <NotebookIcon size={18} weight="bold" aria-hidden />
-          </span>
-          <span className="text-base font-semibold tracking-[-0.01em]">Fieldnote Atlas</span>
-        </span>
+        <BrandLogo height={38} priority />
         <Link href="/login" className="btn btn-secondary">
           Sign in
         </Link>

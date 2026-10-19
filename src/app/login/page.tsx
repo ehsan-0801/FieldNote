@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { NotebookIcon } from "@phosphor-icons/react/ssr";
+import { BrandLogo } from "@/components/ui/brand-logo";
 import { LoginForm } from "@/components/auth/login-form";
 import { getCurrentUser } from "@/server/auth/session";
 
@@ -20,11 +20,8 @@ export default function LoginPage() {
         <RedirectIfSignedIn />
       </Suspense>
       <div className="w-full max-w-sm">
-        <Link href="/" className="mb-8 flex items-center gap-2 text-ink">
-          <span className="grid size-8 place-items-center rounded-[8px] bg-ink text-chalk">
-            <NotebookIcon size={18} weight="bold" aria-hidden />
-          </span>
-          <span className="text-base font-semibold tracking-[-0.01em]">Fieldnote Atlas</span>
+        <Link href="/" className="mb-8 inline-flex" aria-label="FieldNote Atlas home">
+          <BrandLogo height={42} priority />
         </Link>
         <div className="panel px-6 py-6">
           <h1 className="text-lg font-semibold">Sign in to your workspace</h1>

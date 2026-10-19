@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import Image from "next/image";
+import { BrandLogo } from "@/components/ui/brand-logo";
+import mark from "../../../public/brand/fieldnote-atlas-mark.png";
 import {
   ArchiveIcon,
   ArrowUpRightIcon,
@@ -104,6 +107,24 @@ export default function StyleLedgerPage() {
           <span className="font-mono">src/app/globals.css</span>.
         </p>
       </header>
+
+      <Section
+        id="logo"
+        title="Logo"
+        note="Use the full lockup on light surfaces and the light variant on the sidebar. The icon alone is the favicon. Keep clear space of at least the icon’s corner radius."
+      >
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="panel grid place-items-center px-6 py-8">
+            <BrandLogo height={48} />
+          </div>
+          <div className="grid place-items-center rounded-panel bg-sidebar px-6 py-8">
+            <BrandLogo tone="dark" height={48} />
+          </div>
+          <div className="panel grid place-items-center px-6 py-8">
+            <Image src={mark} alt="FieldNote Atlas icon" width={64} height={64} />
+          </div>
+        </div>
+      </Section>
 
       <Section id="colour" title="Colour" note="The default Tailwind palette is cleared, so only these tokens exist as utilities.">
         <div className="grid gap-8 md:grid-cols-3">
