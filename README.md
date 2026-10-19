@@ -39,11 +39,11 @@ pnpm dev                     # http://localhost:3000
 
 Generate a session secret with `openssl rand -base64 48`.
 
-### Demo accounts (development seed only)
+### Demo accounts
 
 | Role        | Email                   | Password              |
 | ----------- | ----------------------- | --------------------- |
-| Admin       | `admin@gmail.com`       | `admin123`            |
+| Admin       | `admin@fieldnote.com`   | `password123`         |
 | Coordinator | `priya@northgate.test`  | `fieldnote-demo-2026` |
 | Technician  | `tomas@northgate.test`  | `fieldnote-demo-2026` |
 | Technician  | `hana@northgate.test`   | `fieldnote-demo-2026` |
@@ -53,6 +53,10 @@ Generate a session secret with `openssl rand -base64 48`.
 A second workspace (“Harbor Studio Collective”, `ade@harbor.test`) exists to demonstrate workspace isolation. All people, places
 and reports are fictional. Passwords are stored only as bcrypt hashes. The seed refuses to create these accounts when
 `NODE_ENV=production` (see [Production seed](#production-seed)).
+
+On the [live demo](https://field-note-swart.vercel.app), sign in with the **admin** account above. The other accounts' shared
+password `fieldnote-demo-2026` is refused in production by design; sign in as the admin and set a new password for them under
+**People** to try the other roles there.
 
 ## Scripts
 
@@ -260,7 +264,7 @@ NODE_ENV=production ADMIN_EMAIL=ops@example.org ADMIN_PASSWORD='a long unique pa
 WORKSPACE_NAME="Your organisation" DATABASE_URL_UNPOOLED=… pnpm db:seed
 ```
 
-It creates the workspace, default categories and one administrator, and no demo data. It refuses `admin@gmail.com`, passwords under 12
+It creates the workspace, default categories and one administrator, and no demo data. It refuses `admin@fieldnote.com`, passwords under 12
 characters and the known demo passwords.
 
 ### Production checklist

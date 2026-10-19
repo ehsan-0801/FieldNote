@@ -7,8 +7,8 @@ import { NO_FACTORS, assessPriority, type PriorityFactorValues } from "../src/do
 
 config({ path: [".env.local", ".env"], quiet: true });
 
-const DEMO_ADMIN_EMAIL = "admin@gmail.com";
-const DEMO_ADMIN_PASSWORD = "admin123";
+const DEMO_ADMIN_EMAIL = "admin@fieldnote.com";
+const DEMO_ADMIN_PASSWORD = "password123";
 const DEMO_MEMBER_PASSWORD = "fieldnote-demo-2026";
 const KNOWN_WEAK_PASSWORDS = new Set([DEMO_ADMIN_PASSWORD, DEMO_MEMBER_PASSWORD, "password", "changeme"]);
 
